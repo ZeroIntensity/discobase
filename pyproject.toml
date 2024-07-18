@@ -7,3 +7,6 @@ name = "discobase"
 readme = "README.md"
 license = "MIT"
 dynamic = ["version"]
+
+[tool.ruff.lint]
+ignore = ["F403"]
