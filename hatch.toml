@@ -2,7 +2,7 @@
 path = "src/discobase/__about__.py"
 
 [build.targets.sdist]
-only-include = "src/discobase/"
+only-include = ["src/discobase/"]
 
 [build.targets.wheel]
 packages = ["src/discobase/"]
