@@ -15,6 +15,7 @@ concurrency:
 env:
     PYTHONUNBUFFERED: "1"
     FORCE_COLOR: "1"
+    TEST_BOT_TOKEN: ${{ secrets.TEST_BOT_TOKEN }}
 
 jobs:
     run:
@@ -29,8 +30,6 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
-            - name: echo "TEST_BOT_TOKEN=${{ secrets.TEST_BOT_TOKEN }}" >> $GITHUB_ENV
-
             - name: Set up Python ${{ matrix.python-version }}
               uses: actions/setup-python@v2
               with:
@@ -41,3 +40,4 @@ jobs:
 
             - name: Run tests
               run: hatch test
+              shell: bash
