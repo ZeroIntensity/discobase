@@ -13,8 +13,12 @@ def database():
 
 
 @pytest.fixture
-def bot(database: discobase.Database):
+async def bot(database: discobase.Database):
     database.login_thread(os.environ["TEST_BOT_TOKEN"], daemon=True)
+    if database.guild:
+        await database.guild.delete()
+        database.guild = None
+
     return database.bot
 
 
@@ -23,7 +27,7 @@ def test_version():
     assert discobase.__license__ == "MIT"
 
 
-def test_creation(database: discobase.Database, bot: discord.Client):
+async def test_creation(database: discobase.Database, bot: discord.Client):
     found_guild: discord.Guild | None = None
     for guild in bot.guilds:
         if guild.name == database.name:
