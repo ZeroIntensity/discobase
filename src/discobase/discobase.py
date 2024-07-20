@@ -17,7 +17,7 @@ class Database:
 
             # Create a new server for the DB if not duplicate
             if self.name not in guilds_list:
-                guild = await self.bot.create_guild(name=self.name)
+                self.guild = await self.bot.create_guild(name=self.name)
 
         # Initialize the bot with the given token
         self.bot.run(token=bot_token)
