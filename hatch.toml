@@ -21,3 +21,10 @@ run = "pytest{env:HATCH_TEST_ARGS:} {args}"
 run-cov = "coverage run -m pytest{env:HATCH_TEST_ARGS:} {args}"
 cov-combine = "coverage combine"
 cov-report = "coverage report"
+
+[envs.docs]
+dependencies = ["mkdocs", "mkdocstrings[python]", "mkdocs-material"]
+
+[envs.docs.scripts]
+build = "mkdocs build --clean"
+serve = "mkdocs serve"
