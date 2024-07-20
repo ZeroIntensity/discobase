@@ -1,3 +1,5 @@
+from threading import Thread
+
 import discord
 
 
@@ -12,6 +14,7 @@ class Database:
         @self.bot.event
         async def on_ready() -> None:
             """When bot is online, creates DB server."""
+            await self.bot.wait_until_ready()
             guilds_list = [
                 guild.name for guild in self.bot.guilds
             ]  # List of guild names the bot is in

@@ -1,4 +1,26 @@
+import os
+from threading import Thread
+
+import discord
+import pytest
+
 import discobase
+
+
+@pytest.fixture
+def database():
+    db = discobase.Database("test")
+    return db
+
+
+@pytest.fixture
+def bot(database: discobase.Database):
+    Thread(
+        target=database.login,
+        daemon=True,
+        args=(os.getenv("TEST_BOT_TOKEN"),),
+    ).start()
+    return database.bot
 
 
 def test_version():
@@ -6,5 +28,11 @@ def test_version():
     assert discobase.__license__ == "MIT"
 
 
-def test_creation():
-    db = discobase.Database("test")
+@pytest.mark.asyncio
+def test_creation(database: discobase.Database, bot: discord.Client):
+    found_guild: discord.Guild | None = None
+    for guild in bot.guilds:
+        if guild.name == database.name:
+            found_guild = guild
+
+    assert found_guild == database.guild
