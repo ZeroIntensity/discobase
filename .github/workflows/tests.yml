@@ -29,8 +29,7 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
-            - name: Set bot token
-              run: echo "TEST_BOT_TOKEN=${{ secrets.TEST_BOT_TOKEN }}" >> $GITHUB_ENV
+            - name: echo "TEST_BOT_TOKEN=${{ secrets.TEST_BOT_TOKEN }}" >> $GITHUB_ENV
 
             - name: Set up Python ${{ matrix.python-version }}
               uses: actions/setup-python@v2
