@@ -8,6 +8,7 @@ only-include = ["src/discobase/"]
 packages = ["src/discobase/"]
 
 [envs.hatch-test]
+installer = "pip"
 dependencies = [
   "coverage[toml]~=7.4",
   "pytest~=8.1",
