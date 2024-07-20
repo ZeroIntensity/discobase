@@ -2,8 +2,14 @@ from threading import Thread
 
 import discord
 
+__all__ = ("Database",)
+
 
 class Database:
+    """
+    Top level class representing a Discord-server database.
+    """
+
     def __init__(self, name: str) -> None:
         self.name = name
         intents = discord.Intents.all()
@@ -11,6 +17,11 @@ class Database:
         self.guild: discord.Guild | None = None
 
     def login(self, bot_token: str) -> None:
+        """
+        Start running the bot.
+        This starts the `asyncio` event loop.
+        """
+
         @self.bot.event
         async def on_ready() -> None:
             """When bot is online, creates DB server."""
