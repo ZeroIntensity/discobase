@@ -5,10 +5,10 @@ on:
         tags:
             - v*
         branches:
-            - master
+            - main
     pull_request:
         branches:
-            - master
+            - main
 
 concurrency:
     group: build-${{ github.head_ref }}
@@ -37,6 +37,7 @@ jobs:
         name: Publish release
         needs:
             - build
+        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
         runs-on: ubuntu-latest
 
         steps:
