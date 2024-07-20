@@ -5,6 +5,7 @@ repo_name: ZeroIntensity/discobase
 
 nav:
     - Home: index.md
+    - API Reference: reference.md
 
 theme:
     name: material
