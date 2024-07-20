@@ -2,7 +2,7 @@ import discord
 
 
 class Database:
-    def __init__(self, name) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
         intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
