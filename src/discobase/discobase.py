@@ -1,5 +1,4 @@
 import discord
-from discord.ext import commands
 
 
 class Database:
@@ -23,5 +22,3 @@ class Database:
 
         # Initialize the bot with the given token
         self.bot.run(token=bot_token)
-
-
