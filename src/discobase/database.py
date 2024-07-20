@@ -40,8 +40,6 @@ class Database:
         Start running the bot.
         This starts the `asyncio` event loop.
         """
-
-        # Initialize the bot with the given token
         self.bot.run(token=bot_token)
 
     def login_thread(
