@@ -5,8 +5,7 @@ from discord.ext import commands
 class Database:
     def __init__(self, name) -> None:
         self.name = name
-        intents = discord.Intents.default()
-        intents.message_content = True
+        intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
 
     def login(self, bot_token) -> None:
