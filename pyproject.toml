@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "discobase"
 readme = "README.md"
 license = "MIT"
+dependencies = ["discord.py"]
 dynamic = ["version"]
 
 [tool.ruff.lint]

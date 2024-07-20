@@ -1,1 +1,2 @@
-from .__about__ import __version__, __license__
+from .__about__ import __license__, __version__
+from .database import *
