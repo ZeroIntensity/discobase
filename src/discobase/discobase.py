@@ -7,7 +7,7 @@ class Database:
         intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
 
-    def login(self, bot_token) -> None:
+    def login(self, bot_token: str) -> None:
         @self.bot.event
         async def on_ready() -> None:
             """When bot is online, creates DB server."""
