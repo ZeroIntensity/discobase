@@ -14,7 +14,7 @@ def database():
 
 @pytest.fixture
 def bot(database: discobase.Database):
-    database.login_thread(os.environ["TEST_BOT_TOKEN"])
+    database.login_thread(os.environ["TEST_BOT_TOKEN"], daemon=True)
     return database.bot
 
 
@@ -23,7 +23,6 @@ def test_version():
     assert discobase.__license__ == "MIT"
 
 
-@pytest.mark.asyncio
 def test_creation(database: discobase.Database, bot: discord.Client):
     found_guild: discord.Guild | None = None
     for guild in bot.guilds:
