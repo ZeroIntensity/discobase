@@ -10,3 +10,6 @@ dynamic = ["version"]
 
 [tool.ruff.lint]
 ignore = ["F403"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
