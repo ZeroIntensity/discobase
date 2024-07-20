@@ -15,6 +15,7 @@ concurrency:
 env:
     PYTHONUNBUFFERED: "1"
     FORCE_COLOR: "1"
+    TEST_BOT_TOKEN: ${{ secrets.TEST_BOT_TOKEN }}
 
 jobs:
     run:
