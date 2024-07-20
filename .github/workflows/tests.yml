@@ -20,6 +20,7 @@ env:
 jobs:
     run:
         name: Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+        environment: tests
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
@@ -40,4 +41,3 @@ jobs:
 
             - name: Run tests
               run: hatch test
-              shell: bash
