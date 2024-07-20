@@ -80,6 +80,6 @@ plugins:
                       seperate_signature: true
                       show_signature_annotations: true
                       signature_crossrefs: true
-                      show_source: false
+                      show_source: true
                       show_if_no_docstring: true
-                      show_docstring_examples: false
+                      show_docstring_examples: true
