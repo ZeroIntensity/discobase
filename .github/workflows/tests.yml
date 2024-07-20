@@ -38,4 +38,4 @@ jobs:
               run: pip install --upgrade --pre hatch
 
             - name: Run tests
-              run: hatch run tests
+              run: hatch test
