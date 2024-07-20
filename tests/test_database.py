@@ -15,11 +15,7 @@ def database():
 
 @pytest.fixture
 def bot(database: discobase.Database):
-    Thread(
-        target=database.login,
-        daemon=True,
-        args=(os.getenv("TEST_BOT_TOKEN"),),
-    ).start()
+    database.login_thread(os.environ["TEST_BOT_TOKEN"])
     return database.bot
 
 

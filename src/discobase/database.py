@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from threading import Thread
+
 import discord
 
 __all__ = ("Database",)
@@ -7,7 +9,8 @@ __all__ = ("Database",)
 
 class Database:
     """
-    Top level class representing a Discord-server database.
+    Top level class representing a Discord
+    database bot controller.
     """
 
     def __init__(self, name: str) -> None:
@@ -16,15 +19,11 @@ class Database:
         self.bot = discord.Client(intents=intents)
         self.guild: discord.Guild | None = None
 
-    def login(self, bot_token: str) -> None:
-        """
-        Start running the bot.
-        This starts the `asyncio` event loop.
-        """
-
         @self.bot.event
         async def on_ready() -> None:
-            """When bot is online, creates DB server."""
+            """
+            When bot is online, creates the DB server.
+            """
             await self.bot.wait_until_ready()
             found_guild: discord.Guild | None = None
             for guild in self.bot.guilds:
@@ -36,5 +35,40 @@ class Database:
             else:
                 self.guild = found_guild
 
+    def login(self, bot_token: str) -> None:
+        """
+        Start running the bot.
+        This starts the `asyncio` event loop.
+        """
+
         # Initialize the bot with the given token
         self.bot.run(token=bot_token)
+
+    def login_thread(
+        self,
+        bot_token: str,
+        *,
+        daemon: bool = False,
+        autostart: bool = True,
+    ) -> Thread:
+        """
+        Run the bot in a seperate thread.
+
+        Args:
+            bot_token: Discord API bot token.
+            daemon: Equivalent to `daemon` parameter in `threading.Thread`
+            autostart: Whether to automatically call `start`
+
+        Returns:
+            The `Thread` instance used to start the bot.
+        """
+        thread = Thread(
+            target=self.login,
+            args=(bot_token,),
+            daemon=daemon,
+        )
+
+        if autostart:
+            thread.start()
+
+        return thread
