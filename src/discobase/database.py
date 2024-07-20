@@ -1,4 +1,4 @@
-from threading import Thread
+from __future__ import annotations
 
 import discord
 
@@ -26,13 +26,15 @@ class Database:
         async def on_ready() -> None:
             """When bot is online, creates DB server."""
             await self.bot.wait_until_ready()
-            guilds_list = [
-                guild.name for guild in self.bot.guilds
-            ]  # List of guild names the bot is in
+            found_guild: discord.Guild | None = None
+            for guild in self.bot.guilds:
+                if guild.name == self.name:
+                    found_guild = guild
 
-            # Create a new server for the DB if not duplicate
-            if self.name not in guilds_list:
+            if not found_guild:
                 self.guild = await self.bot.create_guild(name=self.name)
+            else:
+                self.guild = found_guild
 
         # Initialize the bot with the given token
         self.bot.run(token=bot_token)
