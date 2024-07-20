@@ -27,4 +27,4 @@ dependencies = ["mkdocs", "mkdocstrings[python]", "mkdocs-material"]
 
 [envs.docs.scripts]
 build = "mkdocs build --clean"
-server = "mkdocs serve"
+serve = "mkdocs serve"
