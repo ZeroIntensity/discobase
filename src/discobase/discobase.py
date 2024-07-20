@@ -18,11 +18,6 @@ class Database:
             # Create a new server for the DB if not duplicate
             if self.name not in guilds_list:
                 guild = await self.bot.create_guild(name=self.name)
-                # Get the invite link for the server
-                landing_channel = await guild.create_text_channel(
-                    name="landing", reason="creating invite"
-                )
-                await landing_channel.create_invite()
 
         # Initialize the bot with the given token
         self.bot.run(token=bot_token)
