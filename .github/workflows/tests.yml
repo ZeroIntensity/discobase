@@ -12,14 +12,13 @@ concurrency:
     group: test-${{ github.head_ref }}
     cancel-in-progress: true
 
-env:
-    PYTHONUNBUFFERED: "1"
-    FORCE_COLOR: "1"
-    TEST_BOT_TOKEN: ${{ secrets.TEST_BOT_TOKEN }}
-
 jobs:
     run:
         name: Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+        env:
+            PYTHONUNBUFFERED: "1"
+            FORCE_COLOR: "1"
+            TEST_BOT_TOKEN: ${{ secrets.TEST_BOT_TOKEN }}
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
