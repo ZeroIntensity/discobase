@@ -6,6 +6,7 @@ class Database:
         self.name = name
         intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
+        self.guild: discord.Guild | None = None
 
     def login(self, bot_token: str) -> None:
         @self.bot.event
