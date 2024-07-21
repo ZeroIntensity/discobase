@@ -15,11 +15,13 @@ class DatabaseQueries(app_commands.Group):
     @app_commands.describe(table='Choose the database you want to perform an update on.',
                            field='Choose the key you want to update.',
                            new_value="Your new information.")
-    async def update(self,
-                     inter: discord.Interaction,
-                     table: discord.TextChannel,
-                     field: str,
-                     new_value: str) -> None:
+    async def update(
+        self,
+        inter: discord.Interaction,
+         table: discord.TextChannel,
+         field: str,
+         new_value: str
+     ) -> None:
         """
         Modifies a record with a new value.
         """
