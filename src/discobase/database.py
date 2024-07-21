@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from threading import Thread
 
 import discord
@@ -35,12 +36,11 @@ class Database:
             else:
                 self.guild = found_guild
 
-    def login(self, bot_token: str) -> None:
+    async def login(self, bot_token: str) -> None:
         """
         Start running the bot.
-        This starts the `asyncio` event loop.
         """
-        self.bot.run(token=bot_token)
+        await self.bot.start(token=bot_token)
 
     def login_thread(
         self,
@@ -61,8 +61,8 @@ class Database:
             The `Thread` instance used to start the bot.
         """
         thread = Thread(
-            target=self.login,
-            args=(bot_token,),
+            target=asyncio.run,
+            args=(self.login(bot_token),),
             daemon=daemon,
         )
 
