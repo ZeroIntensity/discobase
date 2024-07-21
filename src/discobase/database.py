@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 import orjson
 
-from table import Table
+from .table import Table
 
 __all__ = ("Database",)
 
