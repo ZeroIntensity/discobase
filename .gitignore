@@ -32,3 +32,6 @@ build/
 
 # Builds
 dist/
+
+# secrets
+config.py
