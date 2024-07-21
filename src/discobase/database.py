@@ -116,9 +116,11 @@ class Database:
         primary_table = await self.guild.create_text_channel(table.__name__)
         index_tables: set[discord.TextChannel] = set()
         for field_name in table.__disco_keys__:
-            index_tables.add(
-                await self.guild.create_text_channel(f"{name}_{field_name}")
+            index_channel = await self.guild.create_text_channel(
+                f"{name}_{field_name}"
             )
+            index_tables.add(index_channel)
+            await self._intialize_hash(index_channel)
 
         table_metadata = {
             "name": name,
@@ -137,6 +139,15 @@ class Database:
             )
 
         await self._metadata_channel.send(message_text)
+
+    async def _intialize_hash(
+        index_channel: discord.TextChannel, hash_size: int = 16
+    ) -> None:
+        """
+        Initialize the hash in the given channel with the given size
+        """
+        for _ in range(0, hash_size):
+            await index_channel.send(".")
 
     # This needs to be async for use in gather()
     async def _set_open(self) -> None:

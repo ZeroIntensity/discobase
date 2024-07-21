@@ -50,14 +50,21 @@ async def test_metadata_channel(database: discobase.Database):
     for channel in database.guild.channels:
         if channel == database._metadata_channel:
             found = True
+            break
 
     assert found is True
 
 
 async def test_key_channels(database: discobase.Database):
     assert database.guild is not None
-    names = [guild.name for guild in database.guild.channels]
+    names = [channel.name for channel in database.guild.channels]
 
     for table in database.tables:
         for key in table.__disco_keys__:
             assert f"{table.__name__}_{key}" in names
+
+    for table in database.tables:
+        for key in table.__disco_keys__:
+            for channel in database.guild.channels:
+                if channel.name == f"{table.__name__}_{key}":
+                    assert len(await channel.history()) == 16
