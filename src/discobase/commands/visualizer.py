@@ -13,9 +13,11 @@ class DatabaseVisualizer(commands.Cog):
 
     @app_commands.command()
     @app_commands.describe(channel='Choose the database you want to fetch statistics from.')
-    async def status(self,
-                     inter: discord.Interaction,
-                     channel: discord.TextChannel) -> None:
+    async def status(
+        self,
+        inter: discord.Interaction,
+        channel: discord.TextChannel
+    ) -> None:
         """
         Displays general statistics.
         """
