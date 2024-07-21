@@ -115,12 +115,13 @@ class Database:
                 return
         primary_table = await self.guild.create_text_channel(table.__name__)
         index_tables: set[discord.TextChannel] = set()
+        initial_hash_size = 16
         for field_name in table.__disco_keys__:
             index_channel = await self.guild.create_text_channel(
                 f"{name}_{field_name}"
             )
             index_tables.add(index_channel)
-            await self._intialize_hash(index_channel)
+            await self._intialize_hash(index_channel, initial_hash_size)
 
         table_metadata = {
             "name": name,
@@ -128,7 +129,7 @@ class Database:
             "table_channel": primary_table.id,
             "index_channels": [index_table.id for index_table in index_tables],
             "current_records": 0,
-            "max_records": 0,
+            "max_records": initial_hash_size,
         }
 
         message_text = orjson.dumps(table_metadata).decode("utf-8")

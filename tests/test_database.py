@@ -1,6 +1,7 @@
 import os
 
 import discord
+import orjson
 import pytest
 
 import discobase
@@ -68,3 +69,6 @@ async def test_key_channels(database: discobase.Database):
             for channel in database.guild.channels:
                 if channel.name == f"{table.__name__}_{key}":
                     assert len(await channel.history()) == 16
+                elif channel.name == f"{database.guild.name}_metadata":
+                    table_metadata = orjson.loads(channel.last_message.content)
+                    assert table_metadata["max_records"] == 16
