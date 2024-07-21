@@ -6,6 +6,7 @@ from threading import Thread
 from typing import Type, TypeVar
 
 import discord
+import orjson
 
 from .table import Table
 
@@ -36,6 +37,8 @@ class Database:
         """Set of `Table` objects attached to this database."""
         self.open: bool = False
         """Whether the database is connected."""
+        self._metadata_channel: discord.TextChannel | None = None
+        """discord.py `TextChannel` that acts as the metadata channel."""
         self._task: asyncio.Task[None] | None = None
         # We need to keep a strong reference to the free-flying
         # task
@@ -50,11 +53,71 @@ class Database:
             for guild in self.bot.guilds:
                 if guild.name == self.name:
                     found_guild = guild
+                    break
 
             if not found_guild:
                 self.guild = await self.bot.create_guild(name=self.name)
             else:
                 self.guild = found_guild
+
+            metadata_channel_name = f"{self.name}_metadata"
+            found_channel: discord.TextChannel | None = None
+            for channel in self.guild.text_channels:
+                if channel.name == metadata_channel_name:
+                    found_channel = channel
+                    break
+
+            if not found_channel:
+                self._metadata_channel = await self.guild.create_text_channel(
+                    name=metadata_channel_name
+                )
+            else:
+                self._metadata_channel = found_channel
+
+    async def _create_table(
+        self, name: str, fields: dict[str, tuple[type, bool]]
+    ) -> None:
+        """
+        Creates a new table and all index tables that go with it. Writes the table metadata.
+
+        name: str - The name of the new table
+        fields: Dict[str, Tuple[type, bool]] - Information about the types of data that will be stored in the database
+            key - Field name
+            value - Tuple containing the type of data to be stored and whether the field is required
+        return None
+        """
+
+        if self.guild is None:
+            raise TypeError(
+                "The bot is not logged in. Please call login before creating a table."
+            )
+
+        primary_table = await self.guild.create_text_channel(name)
+        index_tables: set[discord.TextChannel] = set()
+        for field_name in fields.keys():
+            index_tables.add(
+                await self.guild.create_text_channel(f"{name}-{field_name}")
+            )
+
+        table_metadata = {
+            "name": name,
+            "fields": fields,
+            "table_channel": primary_table.id,
+            "index_channels": set(
+                index_table.id for index_table in index_tables
+            ),
+            "current_records": 0,
+            "max_records": 0,
+        }
+
+        message_text = orjson.dumps(table_metadata)
+
+        if not self._metadata_channel:
+            raise TypeError(
+                "(internal error) expected _metadata_channel to be non-None"
+            )
+
+        await self._metadata_channel.send(message_text)
 
     async def _set_open(self) -> None:
         self.open = True
