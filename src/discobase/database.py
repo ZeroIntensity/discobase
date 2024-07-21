@@ -6,9 +6,10 @@ from threading import Thread
 from typing import Type, TypeVar
 
 import discord
+from discord.ext import commands
 import orjson
 
-from .table import Table
+from table import Table
 
 __all__ = ("Database",)
 
@@ -28,8 +29,8 @@ class Database:
         """
         self.name = name
         """Name of the Discord-database server."""
-        self.bot = discord.Client(intents=discord.Intents.all())
-        """discord.py `Client` instance."""
+        self.bot = commands.Bot(intents=discord.Intents.all(), command_prefix="!")
+        """discord.py `Bot` instance."""
         self.guild: discord.Guild | None = None
         """discord.py `Guild` used as the database server."""
         self.tables: set[type[Table]] = set()
