@@ -20,6 +20,6 @@ $ pip install -e .
 ### Other Commands
 
 - `source .venv/bin/activate`: activates the virtual environment (for Mac and Linux).
-- `.\.venv\Scripts\activate`: activates the virtual environ (for Windows).
+- `.\.venv\Scripts\activate`: activates the virtual environment (for Windows).
 - `hatch test`: runs unit tests. Note that you need the `TEST_BOT_TOKEN` environment variable set.
 - `ruff format`: Formats your code.
