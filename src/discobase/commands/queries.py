@@ -43,7 +43,7 @@ class DatabaseQueries(app_commands.Group):
 
 
 class DatabaseCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.bot.tree.add_command(DatabaseQueries(name="query"))
 
