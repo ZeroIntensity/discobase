@@ -83,18 +83,29 @@ class Database:
     ) -> None:
         """
         Creates a new table and all index tables that go with it.
-        Writes the table metadata.
+        This writes the table metadata.
+
+        If the table already exists, this method does (almost) nothing.
+
+        Args:
+            table: Table schema to create channels for.
         """
 
         if self.guild is None:
             raise TypeError("(internal error) guild is None")
 
         name = table.__name__
+
+        for channel in self.guild.channels:
+            if channel == table.__name__:
+                # The table is already set up, no need to do anything more.
+                return
+
         primary_table = await self.guild.create_text_channel(table.__name__)
         index_tables: set[discord.TextChannel] = set()
         for field_name in table.__disco_keys__:
             index_tables.add(
-                await self.guild.create_text_channel(f"{name}-{field_name}")
+                await self.guild.create_text_channel(f"{name}_{field_name}")
             )
 
         table_metadata = {
