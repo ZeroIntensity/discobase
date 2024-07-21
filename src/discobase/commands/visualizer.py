@@ -25,9 +25,11 @@ class DatabaseVisualizer(commands.Cog):
 
     @app_commands.command()
     @app_commands.describe(table='Choose the database you want to retrieve the schema from.')
-    async def schema(self,
-                     inter: discord.Interaction,
-                     table: discord.TextChannel) -> None:
+    async def schema(
+        self,
+        inter: discord.Interaction,
+        table: discord.TextChannel
+    ) -> None:
         """
         Fetches the schema of the channel.
         """
