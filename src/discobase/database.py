@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from threading import Thread
 
 import discord
@@ -19,6 +20,9 @@ class Database:
         intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
         self.guild: discord.Guild | None = None
+        self._task: asyncio.Task[None] | None = None
+        # We need to keep a strong reference to the free-flying
+        # task
 
         @self.bot.event
         async def on_ready() -> None:
@@ -41,6 +45,22 @@ class Database:
         Start running the bot.
         """
         await self.bot.start(token=bot_token)
+
+    def login_task(self, bot_token: str) -> asyncio.Task[None]:
+        task = asyncio.create_task(self.bot.start(bot_token))
+        self._task = task
+        return task
+
+    @asynccontextmanager
+    async def conn(self, bot_token: str):
+        """
+        Connect to the bot under a context manager.
+        """
+        try:
+            self.login_task(bot_token)
+            yield
+        finally:
+            await self.bot.close()
 
     def login_thread(
         self,
