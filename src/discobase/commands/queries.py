@@ -29,11 +29,13 @@ class DatabaseQueries(app_commands.Group):
 
     @app_commands.command()
     @app_commands.describe(key="The shared primary key to join the tables on.")
-    async def join(self,
-                   inter: discord.Integration,
-                   first_table: discord.TextChannel,
-                   second_table: discord.TextChannel,
-                   key: str) -> None:
+    async def join(
+        self,
+        inter: discord.Integration,
+        first_table: discord.TextChannel,
+        second_table: discord.TextChannel,
+        key: str
+    ) -> None:
         """
         Performs a left-join on two tables.
         """
