@@ -7,24 +7,23 @@ import discobase
 
 
 @pytest.fixture
-def database():
+async def database():
     db = discobase.Database("test")
+    db.login_task(os.environ["TEST_BOT_TOKEN"])
+    if db.guild:
+        await db.guild.delete()
+        db.guild = None
+        await db.init()
 
-    @db.table
-    class User(discobase.Table):
-        name: str
-        password: str
-
-    return db
+    try:
+        await db.wait_ready()
+        yield db
+    finally:
+        await db.close()
 
 
 @pytest.fixture
-async def bot(database: discobase.Database):
-    database.login_thread(os.environ["TEST_BOT_TOKEN"], daemon=True)
-    if database.guild:
-        await database.guild.delete()
-        database.guild = None
-
+def bot(database: discobase.Database):
     return database.bot
 
 

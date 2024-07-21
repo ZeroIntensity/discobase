@@ -28,8 +28,7 @@ class Database:
         """
         self.name = name
         """Name of the Discord-database server."""
-        intents = discord.Intents.all()
-        self.bot = discord.Client(intents=intents)
+        self.bot = discord.Client(intents=discord.Intents.all())
         """discord.py `Client` instance."""
         self.guild: discord.Guild | None = None
         """discord.py `Guild` used as the database server."""
@@ -42,40 +41,51 @@ class Database:
         self._task: asyncio.Task[None] | None = None
         # We need to keep a strong reference to the free-flying
         # task
+        self._setup_event = asyncio.Event()
 
         @self.bot.event
         async def on_ready() -> None:
-            """
-            When bot is online, creates the DB server.
-            """
-            await self.bot.wait_until_ready()
-            found_guild: discord.Guild | None = None
-            for guild in self.bot.guilds:
-                if guild.name == self.name:
-                    found_guild = guild
-                    break
+            await self.init()
 
-            if not found_guild:
-                self.guild = await self.bot.create_guild(name=self.name)
-            else:
-                self.guild = found_guild
+    async def init(self) -> None:
+        """
+        Initializes the database server.
+        Generally, you don't want to call this manually.
+        """
+        await self.bot.wait_until_ready()
+        found_guild: discord.Guild | None = None
+        for guild in self.bot.guilds:
+            if guild.name == self.name:
+                found_guild = guild
+                break
 
-            metadata_channel_name = f"{self.name}_metadata"
-            found_channel: discord.TextChannel | None = None
-            for channel in self.guild.text_channels:
-                if channel.name == metadata_channel_name:
-                    found_channel = channel
-                    break
+        if not found_guild:
+            self.guild = await self.bot.create_guild(name=self.name)
+        else:
+            self.guild = found_guild
 
-            if not found_channel:
-                self._metadata_channel = await self.guild.create_text_channel(
-                    name=metadata_channel_name
-                )
-            else:
-                self._metadata_channel = found_channel
+        metadata_channel_name = f"{self.name}_metadata"
+        found_channel: discord.TextChannel | None = None
+        for channel in self.guild.text_channels:
+            if channel.name == metadata_channel_name:
+                found_channel = channel
+                break
 
-            for table in self.tables:
-                await self._create_table(table)
+        if not found_channel:
+            self._metadata_channel = await self.guild.create_text_channel(
+                name=metadata_channel_name
+            )
+        else:
+            self._metadata_channel = found_channel
+
+        for table in self.tables:
+            await self._create_table(table)
+
+        self._setup_event.set()
+
+    async def wait_ready(self) -> None:
+        """Wait until the database is ready."""
+        await self._setup_event.wait()
 
     async def _create_table(
         self,
@@ -100,7 +110,6 @@ class Database:
             if channel == table.__name__:
                 # The table is already set up, no need to do anything more.
                 return
-
         primary_table = await self.guild.create_text_channel(table.__name__)
         index_tables: set[discord.TextChannel] = set()
         for field_name in table.__disco_keys__:
@@ -110,11 +119,9 @@ class Database:
 
         table_metadata = {
             "name": name,
-            "fields": table.__disco_keys__,
+            "fields": tuple(table.__disco_keys__),
             "table_channel": primary_table.id,
-            "index_channels": set(
-                index_table.id for index_table in index_tables
-            ),
+            "index_channels": [index_table.id for index_table in index_tables],
             "current_records": 0,
             "max_records": 0,
         }
@@ -128,6 +135,7 @@ class Database:
 
         await self._metadata_channel.send(message_text)
 
+    # This needs to be async for use in gather()
     async def _set_open(self) -> None:
         self.open = True
 
@@ -177,6 +185,16 @@ class Database:
         self._task = task
         return task
 
+    async def close(self) -> None:
+        """
+        Close the bot connection.
+        """
+        if not self.open:
+            raise ValueError(
+                "cannot close a connection that is not open",
+            )
+        await self.bot.close()
+
     @asynccontextmanager
     async def conn(self, bot_token: str):
         """
@@ -209,9 +227,10 @@ class Database:
         """
         try:
             self.login_task(bot_token)
+            await self.wait_ready()
             yield
         finally:
-            await self.bot.close()
+            await self.close()
 
     def login_thread(
         self,
