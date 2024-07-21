@@ -6,6 +6,8 @@ from threading import Thread
 
 import discord
 
+from .table import Table
+
 __all__ = ("Database",)
 
 
@@ -27,6 +29,10 @@ class Database:
         """discord.py `Client` instance."""
         self.guild: discord.Guild | None = None
         """discord.py `Guild` used as the database server."""
+        self.tables: set[type[Table]] = set()
+        """Set of `Table` objects attached to this database."""
+        self.open: bool = False
+        """Whether the database is connected."""
         self._task: asyncio.Task[None] | None = None
         # We need to keep a strong reference to the free-flying
         # task
@@ -47,11 +53,17 @@ class Database:
             else:
                 self.guild = found_guild
 
+    async def _set_open(self) -> None:
+        self.open = True
+
     async def login(self, bot_token: str) -> None:
         """
         Start running the bot.
         """
-        await self.bot.start(token=bot_token)
+        # We use _set_open() with a gather to keep a finer link
+        # between the `open` attribute and whether it's actually
+        # running.
+        await asyncio.gather(self.bot.start(token=bot_token), self._set_open())
 
     def login_task(self, bot_token: str) -> asyncio.Task[None]:
         """
@@ -86,7 +98,7 @@ class Database:
             asyncio.run(main())
             ```
         """
-        task = asyncio.create_task(self.bot.start(bot_token))
+        task = asyncio.create_task(self.login(bot_token))
         self._task = task
         return task
 
@@ -154,3 +166,15 @@ class Database:
             thread.start()
 
         return thread
+
+    def table(self, clas: type[Table]):
+        if not issubclass(clas, Table):
+            raise TypeError(
+                f"{clas} is not a subclass of Table, did you forget it?",
+            )
+
+        clas.database = self
+        for field in clas.__pydantic_fields_set__:
+            clas.keys.add(field)
+
+        self.tables.add(clas)
