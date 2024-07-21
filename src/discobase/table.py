@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional, Set
 
 from pydantic import BaseModel
 
@@ -14,7 +14,7 @@ __all__ = ("Table",)
 # here, since Pydantic can't handle it
 class Table(BaseModel):
     __disco_database__: ClassVar[Optional[Database]] = None
-    __disco_keys__: ClassVar[set[str]] = set()
+    __disco_keys__: ClassVar[Set[str]] = set()
 
     def _ensure_db(self) -> None:
         if not self.__disco_database__:
