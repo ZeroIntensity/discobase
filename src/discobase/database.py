@@ -88,7 +88,7 @@ class Database:
         }
 
         message_text = json.dumps(table_metadata)
-        self.metadata_channel.send(message_text)
+        await self.metadata_channel.send(message_text)
 
     def login(self, bot_token: str) -> None:
         """
