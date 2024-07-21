@@ -28,4 +28,7 @@ class Table(BaseModel):
             )
 
     async def save(self) -> None:
+        """
+        Commit the current object to the database.
+        """
         self._ensure_db()
