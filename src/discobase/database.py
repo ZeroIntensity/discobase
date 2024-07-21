@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from threading import Thread
+from typing import Type, TypeVar
 
 import discord
 
 from .table import Table
 
 __all__ = ("Database",)
+
+T = TypeVar("T", bound=Type[Table])
 
 
 class Database:
@@ -167,14 +170,15 @@ class Database:
 
         return thread
 
-    def table(self, clas: type[Table]):
+    def table(self, clas: T) -> T:
         if not issubclass(clas, Table):
             raise TypeError(
                 f"{clas} is not a subclass of Table, did you forget it?",
             )
 
         clas.database = self
-        for field in clas.__pydantic_fields_set__:
+        for field in clas.model_fields:
             clas.keys.add(field)
 
         self.tables.add(clas)
+        return clas
