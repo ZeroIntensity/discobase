@@ -9,6 +9,9 @@ license = "MIT"
 dependencies = ["discord.py"]
 dynamic = ["version"]
 
+[tool.ruff]
+line-length = 79  # PEP 8
+
 [tool.ruff.lint]
 ignore = ["F403"]
 

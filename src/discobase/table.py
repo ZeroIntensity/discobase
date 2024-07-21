@@ -23,7 +23,9 @@ class Table(BaseModel):
             )
 
         if not self.database.open:
-            raise ValueError("database is not connected! did you forget to open it?")
+            raise ValueError(
+                "database is not connected! did you forget to open it?"
+            )
 
     async def save(self) -> None:
         self._ensure_db()
