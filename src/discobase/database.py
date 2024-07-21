@@ -74,34 +74,32 @@ class Database:
             else:
                 self._metadata_channel = found_channel
 
+            for table in self.tables:
+                await self._create_table(table)
+
     async def _create_table(
-        self, name: str, fields: dict[str, tuple[type, bool]]
+        self,
+        table: type[Table],
     ) -> None:
         """
-        Creates a new table and all index tables that go with it. Writes the table metadata.
-
-        name: str - The name of the new table
-        fields: Dict[str, Tuple[type, bool]] - Information about the types of data that will be stored in the database
-            key - Field name
-            value - Tuple containing the type of data to be stored and whether the field is required
-        return None
+        Creates a new table and all index tables that go with it.
+        Writes the table metadata.
         """
 
         if self.guild is None:
-            raise TypeError(
-                "The bot is not logged in. Please call login before creating a table."
-            )
+            raise TypeError("(internal error) guild is None")
 
-        primary_table = await self.guild.create_text_channel(name)
+        name = table.__name__
+        primary_table = await self.guild.create_text_channel(table.__name__)
         index_tables: set[discord.TextChannel] = set()
-        for field_name in fields.keys():
+        for field_name in table.__disco_keys__:
             index_tables.add(
                 await self.guild.create_text_channel(f"{name}-{field_name}")
             )
 
         table_metadata = {
             "name": name,
-            "fields": fields,
+            "fields": table.__disco_keys__,
             "table_channel": primary_table.id,
             "index_channels": set(
                 index_table.id for index_table in index_tables
@@ -110,7 +108,7 @@ class Database:
             "max_records": 0,
         }
 
-        message_text = orjson.dumps(table_metadata)
+        message_text = orjson.dumps(table_metadata).decode("utf-8")
 
         if not self._metadata_channel:
             raise TypeError(
@@ -239,9 +237,9 @@ class Database:
                 f"{clas} is not a subclass of Table, did you forget it?",
             )
 
-        clas.database = self
+        clas.__disco_database__ = self
         for field in clas.model_fields:
-            clas.keys.add(field)
+            clas.__disco_keys__.add(field)
 
         self.tables.add(clas)
         return clas

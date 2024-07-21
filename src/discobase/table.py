@@ -13,16 +13,16 @@ __all__ = ("Table",)
 # Note that we can't use 3.10+ type[] syntax
 # here, since Pydantic can't handle it
 class Table(BaseModel):
-    database: ClassVar[Optional[Database]] = None
-    keys: ClassVar[set[str]] = set()
+    __disco_database__: ClassVar[Optional[Database]] = None
+    __disco_keys__: ClassVar[set[str]] = set()
 
     def _ensure_db(self) -> None:
-        if not self.database:
+        if not self.__disco_database__:
             raise TypeError(
                 f"{self.__class__.__name__} has no attached database, did you forget to call @db.table?"  # noqa
             )
 
-        if not self.database.open:
+        if not self.__disco_database__.open:
             raise ValueError(
                 "database is not connected! did you forget to open it?"
             )
