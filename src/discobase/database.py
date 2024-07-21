@@ -16,10 +16,17 @@ class Database:
     """
 
     def __init__(self, name: str) -> None:
+        """
+        Args:
+            name: Name of the Discord server that will be used as the database.
+        """
         self.name = name
+        """Name of the Discord-database server."""
         intents = discord.Intents.all()
         self.bot = discord.Client(intents=intents)
+        """discord.py `Client` instance."""
         self.guild: discord.Guild | None = None
+        """discord.py `Guild` used as the database server."""
         self._task: asyncio.Task[None] | None = None
         # We need to keep a strong reference to the free-flying
         # task
@@ -47,6 +54,38 @@ class Database:
         await self.bot.start(token=bot_token)
 
     def login_task(self, bot_token: str) -> asyncio.Task[None]:
+        """
+        Call `login()` as a free-flying task, instead of
+        blocking the event loop.
+
+        Note that this method stores a reference to the created
+        task object, allowing it to be truly "free-flying."
+
+        Args:
+            bot_token: Discord API bot token to log in to.
+
+        Returns:
+            Created `asyncio.Task` object. Note that the database
+            will store this internally, so you don't have to worry
+            about `await`ing it later. In most cases, you don't need
+            the returned `asyncio.Task` object.
+
+        Example:
+            ```py
+            import asyncio
+            import os
+
+            import discobase
+
+
+            async def main():
+                db = discobase.Database("test")
+                dv.login_task("...")
+
+
+            asyncio.run(main())
+            ```
+        """
         task = asyncio.create_task(self.bot.start(bot_token))
         self._task = task
         return task
@@ -55,6 +94,31 @@ class Database:
     async def conn(self, bot_token: str):
         """
         Connect to the bot under a context manager.
+        This is the recommended method to use for logging in.
+
+        Args:
+            bot_token: Discord API bot token to log in to.
+
+        Returns:
+            An asynchronous context manager.
+            See `contextlib.asynccontextmanager` for details.
+
+        Example:
+            ```py
+            import asyncio
+            import os
+
+            import discobase
+
+
+            async def main():
+                db = discobase.Database("test")
+                async with db.conn(os.getenv("BOT_TOKEN")):
+                    ...  # Your database code
+
+
+            asyncio.run(main())
+            ```
         """
         try:
             self.login_task(bot_token)
