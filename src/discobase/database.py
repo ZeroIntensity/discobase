@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from threading import Thread
 from typing import Type, TypeVar
 
 import discord
@@ -240,35 +239,6 @@ class Database:
             yield
         finally:
             await self.close()
-
-    def login_thread(
-        self,
-        bot_token: str,
-        *,
-        daemon: bool = False,
-        autostart: bool = True,
-    ) -> Thread:
-        """
-        Run the bot in a seperate thread.
-
-        Args:
-            bot_token: Discord API bot token.
-            daemon: Equivalent to `daemon` parameter in `threading.Thread`
-            autostart: Whether to automatically call `start`
-
-        Returns:
-            The `Thread` instance used to start the bot.
-        """
-        thread = Thread(
-            target=asyncio.run,
-            args=(self.login(bot_token),),
-            daemon=daemon,
-        )
-
-        if autostart:
-            thread.start()
-
-        return thread
 
     def table(self, clas: T) -> T:
         if not issubclass(clas, Table):
