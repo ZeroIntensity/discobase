@@ -134,29 +134,19 @@ async def test_add_record(database: discobase.Database):
                     for channel in database.guild.channels
                     if channel.id == id
                 ][0]
-                print(f"Channel ID {index_channel.id}")
                 index_messages = [
                     message
                     async for message in index_channel.history(
                         limit=table_metadata["max_records"]
                     )
                 ]
-                sorted(index_messages, key=lambda message: message.id)
                 hashed_field = hash(value)
                 message_hash = (hashed_field & 0x7FFFFFFF) % table_metadata[
                     "max_records"
                 ]
-                print(
-                    f"{value}'s hash in test: {hashed_field}, message_hash: {message_hash}"
-                )
-                print(
-                    f"{value}'s message id in test: {index_messages[message_hash].id}"
-                )
                 existing_content = orjson.loads(
                     index_messages[message_hash].content
                 )
                 assert existing_content["key"] == hashed_field
                 assert message.id in existing_content["record_ids"]
                 break
-
-    await database._delete_table(TestTable.__name__.lower())

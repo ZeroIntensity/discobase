@@ -257,21 +257,16 @@ class Database:
                         for channel in self.guild.channels
                         if channel.id == id
                     ][0]
-                    print(f"Channel ID {index_channel.id}")
                     messages = [
                         message
                         async for message in index_channel.history(
                             limit=table_metadata["max_records"]
                         )
                     ]
-                    sorted(messages, key=lambda message: message.id)
                     hashed_field = hash(value)
                     message_hash = (
                         hashed_field & 0x7FFFFFFF
                     ) % table_metadata["max_records"]
-                    print(
-                        f"{value}'s hash in function: {hashed_field}, message_hash: {message_hash}"
-                    )
                     content = messages[message_hash].content
                     existing_content = (
                         orjson.loads(content) if content != "null" else content
@@ -294,9 +289,6 @@ class Database:
                         }
                         editable_message = await index_channel.fetch_message(
                             messages[message_hash].id
-                        )
-                        print(
-                            f"{value}'s message id in function: {editable_message.id}"
                         )
                         await editable_message.edit(
                             content=orjson.dumps(message_content).decode(
@@ -329,6 +321,7 @@ class Database:
                                 "utf-8"
                             )
                         )
+                        break
         return message
 
     def _get_table_metadata(self, table_name: str) -> dict | None:
