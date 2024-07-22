@@ -4,11 +4,6 @@ on:
     push:
         tags:
             - v*
-        branches:
-            - main
-    pull_request:
-        branches:
-            - main
 
 concurrency:
     group: build-${{ github.head_ref }}
