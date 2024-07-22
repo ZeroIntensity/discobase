@@ -165,6 +165,9 @@ class Database:
         metadata_messages = [
             message async for message in self._metadata_channel.history()
         ]
+
+        # For some reason deleting messages with `await message.delete()` was not working
+        # That is why I fetch the message again to delete it.
         for message in metadata_messages:
             table_metadata = orjson.loads(message.content)
             if table_metadata["name"] == table_name:
@@ -174,12 +177,16 @@ class Database:
                 await message_to_delete.delete()
 
     async def _resize_hash(
-        self, index_channel: discord.TextChannel, hash_size
+        self, index_channel: discord.TextChannel, amount: int
     ) -> None:
         """
-        Initialize the hash in the given channel with the given size
+        Increases the hash for index_channel by amount
+
+        Args:
+            index_channel: the channel that contains index data for a database
+            amount: the amount to increase the size by
         """
-        for _ in range(0, hash_size):
+        for _ in range(0, amount):
             await index_channel.send("None")
 
     # This needs to be async for use in gather()
