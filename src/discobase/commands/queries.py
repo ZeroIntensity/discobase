@@ -8,7 +8,7 @@ class DatabaseQueries(app_commands.Group):
     All the slash commands for querying information from the database.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @app_commands.command()
@@ -48,5 +48,5 @@ class DatabaseCog(commands.Cog):
         self.bot.tree.add_command(DatabaseQueries(name="query"))
 
 
-async def setup(bot) -> None:
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DatabaseQueries(bot))
