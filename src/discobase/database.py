@@ -74,12 +74,20 @@ class Database:
                 found_channel = channel
                 break
 
+        table_metadata: list[dict] = []
         if not found_channel:
             self._metadata_channel = await self.guild.create_text_channel(
                 name=metadata_channel_name
             )
         else:
             self._metadata_channel = found_channel
+            table_metadata = [
+                orjson.loads(message.content)
+                async for message in self._metadata_channel.history
+            ]
+
+        if len(table_metadata) > 0:
+            self._load_table_classes(table_metadata)
 
         for table in self.tables:
             await self._create_table(table)
@@ -89,6 +97,23 @@ class Database:
     async def wait_ready(self) -> None:
         """Wait until the database is ready."""
         await self._setup_event.wait()
+
+    def _load_table_classes(self, table_metadata: list[dict]) -> None:
+        """
+        This reloads all of the Table classes using the metadata from the
+        metadata_channel
+
+        Args:
+            table_metadata: List of dictionary representations of each table's metadata
+              dictionary_keys:
+                name: The table name,
+                keys: a tuple containing the name of all keys(fields) of the table,
+                table_channel: the channel ID that holds the main table,
+                index_channels: a dictionary of (index_channel_name: index_channel_id) key, value pairs
+                current_records: The current number of records in the table,
+                max_records: the max number of records in the table before a resize is required,
+        """
+        pass
 
     async def _create_table(
         self, table: type[Table], initial_hash_size: int = 16
