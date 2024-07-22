@@ -142,7 +142,15 @@ class Database:
     async def login(self, bot_token: str) -> None:
         """
         Start running the bot.
+
+        Args:
+            bot_token: Discord API bot token to log in with.
         """
+        if self.open:
+            raise RuntimeError(
+                "connection is already open, did you call login() twice?"
+            )
+
         # We use _set_open() with a gather to keep a finer link
         # between the `open` attribute and whether it's actually
         # running.
@@ -193,6 +201,7 @@ class Database:
             raise ValueError(
                 "cannot close a connection that is not open",
             )
+        self.open = False
         await self.bot.close()
 
     @asynccontextmanager
