@@ -24,6 +24,14 @@ async def database():
 
 
 @pytest.fixture
+def test_table(database: discobase.Database):
+    class TestTable(discobase.Table):
+        __disco_keys__ = set(("username", "password"))
+
+    return database.table(TestTable)
+
+
+@pytest.fixture
 def bot(database: discobase.Database):
     return database.bot
 
@@ -56,19 +64,28 @@ async def test_metadata_channel(database: discobase.Database):
     assert found is True
 
 
-async def test_key_channels(database: discobase.Database):
+async def test_create_table(
+    database: discobase.Database, test_table: discobase.Table
+):
     assert database.guild is not None
+    assert database._metadata_channel is not None
+    hash_size = 1
+    await database._create_table(test_table, initial_hash_size=hash_size)
     names = [channel.name for channel in database.guild.channels]
 
-    for table in database.tables:
-        for key in table.__disco_keys__:
-            assert f"{table.__name__}_{key}" in names
+    table_metadata = orjson.loads(
+        database._metadata_channel.last_message.content
+    )
+    assert table_metadata["max_records"] == hash_size
 
     for table in database.tables:
         for key in table.__disco_keys__:
-            for channel in database.guild.channels:
-                if channel.name == f"{table.__name__}_{key}":
-                    assert len(await channel.history()) == 16
-                elif channel.name == f"{database.guild.name}_metadata":
-                    table_metadata = orjson.loads(channel.last_message.content)
-                    assert table_metadata["max_records"] == 16
+            assert f"{table.__name__.lower()}_{key.lower()}" in names
+
+    for index_id in table_metadata["index_channels"]:
+        channel: discord.abc.GuildChannel = database.guild.get_channel(
+            index_id
+        )
+        assert isinstance(channel, discord.TextChannel)
+        messages = [message async for message in channel.history()]
+        assert len(messages) == hash_size

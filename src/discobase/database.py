@@ -91,8 +91,7 @@ class Database:
         await self._setup_event.wait()
 
     async def _create_table(
-        self,
-        table: type[Table],
+        self, table: type[Table], initial_hash_size: int = 16
     ) -> None:
         """
         Creates a new table and all index tables that go with it.
@@ -102,30 +101,30 @@ class Database:
 
         Args:
             table: Table schema to create channels for.
+            initial_hash_size: the size the index hash tables should start at.
         """
 
         if self.guild is None:
             raise TypeError("(internal error) guild is None")
 
-        name = table.__name__
+        name = table.__name__.lower()
 
         for channel in self.guild.channels:
-            if channel == table.__name__:
+            if channel == name:
                 # The table is already set up, no need to do anything more.
                 return
-        primary_table = await self.guild.create_text_channel(table.__name__)
+        primary_table = await self.guild.create_text_channel(name)
         index_tables: set[discord.TextChannel] = set()
-        initial_hash_size = 16
-        for field_name in table.__disco_keys__:
+        for key_name in table.__disco_keys__:
             index_channel = await self.guild.create_text_channel(
-                f"{name}_{field_name}"
+                f"{name}_{key_name}"
             )
             index_tables.add(index_channel)
-            await self._intialize_hash(index_channel, initial_hash_size)
+            await self._resize_hash(index_channel, initial_hash_size)
 
         table_metadata = {
             "name": name,
-            "fields": tuple(table.__disco_keys__),
+            "keys": tuple(table.__disco_keys__),
             "table_channel": primary_table.id,
             "index_channels": [index_table.id for index_table in index_tables],
             "current_records": 0,
@@ -141,14 +140,14 @@ class Database:
 
         await self._metadata_channel.send(message_text)
 
-    async def _intialize_hash(
-        index_channel: discord.TextChannel, hash_size: int = 16
+    async def _resize_hash(
+        self, index_channel: discord.TextChannel, hash_size
     ) -> None:
         """
         Initialize the hash in the given channel with the given size
         """
         for _ in range(0, hash_size):
-            await index_channel.send(".")
+            await index_channel.send("None")
 
     # This needs to be async for use in gather()
     async def _set_open(self) -> None:
