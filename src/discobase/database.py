@@ -75,7 +75,7 @@ class Database:
         else:
             self.guild = found_guild
 
-        metadata_channel_name = f"{self.name}_metadata"
+        metadata_channel_name = f"{self.name}_db_metadata"
         found_channel: discord.TextChannel | None = None
         for channel in self.guild.text_channels:
             if channel.name == metadata_channel_name:
@@ -177,7 +177,12 @@ class Database:
                 "(internal error) expected _metadata_channel to be non-None"
             )
 
-        return await self._metadata_channel.send(message_text)
+        message = await self._metadata_channel.send(message_text)
+        table_metadata["my_message_id"] = message.id
+
+        return await message.edit(
+            content=orjson.dumps(table_metadata).decode("utf-8")
+        )
 
     async def _delete_table(self, table_name: str):
         """
@@ -252,7 +257,16 @@ class Database:
         if table_metadata["current_records"] > table_metadata["max_records"]:
             raise IndexError("The table is full")
 
-        encoded_record = record.model_dump_json()
+        metadata_message = await self._metadata_channel.fetch_message(
+            table_metadata["my_message_id"]
+        )
+        metadata_message = await metadata_message.edit(
+            content=orjson.dumps(table_metadata).decode("utf-8")
+        )
+
+        record_dict = {}
+        record_dict["content"] = record.model_dump()
+        record_dict["indexes"] = {}
 
         main_table = [
             channel
@@ -260,86 +274,169 @@ class Database:
             if channel.id == table_metadata["table_channel"]
         ][0]
 
-        message = await main_table.send(str(encoded_record))
+        message = await main_table.send(
+            orjson.dumps(record_dict).decode("utf-8")
+        )
         message_id = message.id
 
-        for field, value in record.model_dump().items():
+        for field, value in record_dict["content"].items():
             for name, id in table_metadata["index_channels"].items():
-                if name.lower().split("_")[1] != field.lower():
-                    continue
+                if name.lower().split("_")[1] == field.lower():
+                    index_channel = [
+                        channel
+                        for channel in self.guild.channels
+                        if channel.id == id
+                    ][0]
+                    messages = [
+                        message
+                        async for message in index_channel.history(
+                            limit=table_metadata["max_records"]
+                        )
+                    ]
+                    hashed_field = hash(value)
+                    message_hash = (
+                        hashed_field & 0x7FFFFFFF
+                    ) % table_metadata["max_records"]
+                    content = messages[message_hash].content
+                    existing_content = (
+                        orjson.loads(content) if content != "null" else content
+                    )
 
-                index_channel = [
-                    channel
-                    for channel in self.guild.channels
-                    if channel.id == id
-                ][0]
-                print(f"Channel ID {index_channel.id}")
-                messages = [
-                    message
-                    async for message in index_channel.history(
-                        limit=table_metadata["max_records"]
-                    )
-                ]
-                sorted(messages, key=lambda message: message.id)
-                hashed_field = hash(value)
-                message_hash = (hashed_field & 0x7FFFFFFF) % table_metadata[
-                    "max_records"
-                ]
-                print(
-                    f"{value}'s hash in function: {hashed_field}, message_hash: {message_hash}"
-                )
-                content = messages[message_hash].content
-                existing_content = (
-                    orjson.loads(content) if content != "null" else content
-                )
+                    if (
+                        existing_content != "null"
+                        and existing_content["key"] == hashed_field
+                    ):
+                        existing_content["record_ids"].append(message_id)
+                        messages[message_hash].edit(
+                            content=orjson.dumps(existing_content)
+                        )
+                        record_dict["indexes"][field] = messages[
+                            message_hash
+                        ].id
+                    elif existing_content == "null":
+                        message_content = {
+                            "key": hashed_field,
+                            "record_ids": [
+                                message_id,
+                            ],
+                        }
+                        editable_message = await index_channel.fetch_message(
+                            messages[message_hash].id
+                        )
+                        await editable_message.edit(
+                            content=orjson.dumps(message_content).decode(
+                                "utf-8"
+                            )
+                        )
+                        record_dict["indexes"][field] = editable_message.id
+                    else:
+                        i = 1
+                        index_message = messages[message_hash + i]
+                        while index_message.content != "null":
+                            i += 1
+                            if (message_hash + i) >= len(messages):
+                                i = 0 - message_hash
+                            elif message_hash + i == message_hash:
+                                raise IndexError("The database is full")
+                            index_message = index_channel.messages[
+                                message_hash + i
+                            ]
+                        message_content = {
+                            "key": hashed_field,
+                            "record_ids": [
+                                message_id,
+                            ],
+                        }
+                        editable_message = await index_channel.fetch_message(
+                            index_message.id
+                        )
+                        await editable_message.edit(
+                            content=orjson.dumps(message_content).decode(
+                                "utf-8"
+                            )
+                        )
+                        record_dict["indexes"][field] = editable_message.id
+                        break
+        return await message.edit(
+            content=orjson.dumps(record_dict).decode("utf-8")
+        )
 
-                if (
-                    existing_content != "null"
-                    and existing_content["key"] == hashed_field
-                ):
-                    existing_content["record_ids"].append(message_id)
-                    messages[message_hash].edit(orjson.dumps(existing_content))
-                elif existing_content == "null":
-                    message_content = {
-                        "key": hashed_field,
-                        "record_ids": [
-                            message_id,
-                        ],
-                    }
-                    editable_message = await index_channel.fetch_message(
-                        messages[message_hash].id
+    async def _find_records(self, table_name: str, **kwargs) -> list[dict]:
+        """
+        Finds a record based on field values
+        """
+
+        table_metadata = self._get_table_metadata(table_name.lower())
+
+        sets_list: list[set[int]] = []
+
+        for field, value in kwargs.items():
+            if field not in table_metadata["keys"]:
+                raise AttributeError(
+                    f"Table '{table_metadata["name"]}' has no '{field}' attribute"
+                )
+            for name, id in table_metadata["index_channels"].items():
+                if name.lower().split("_")[1] == field.lower():
+                    index_channel = [
+                        channel
+                        for channel in self.guild.channels
+                        if channel.id == id
+                    ][0]
+                    index_messages = [
+                        message
+                        async for message in index_channel.history(
+                            limit=table_metadata["max_records"]
+                        )
+                    ]
+                    hashed_field = hash(value)
+                    message_hash = (
+                        hashed_field & 0x7FFFFFFF
+                    ) % table_metadata["max_records"]
+                    existing_content = orjson.loads(
+                        index_messages[message_hash].content
                     )
-                    print(
-                        f"{value}'s message id in function: {editable_message.id}"
-                    )
-                    await editable_message.edit(
-                        content=orjson.dumps(message_content).decode("utf-8")
-                    )
-                else:
-                    i = 1
-                    index_message = messages[message_hash + i]
-                    while index_message.content != "null":
-                        i += 1
-                        if (message_hash + i) >= len(messages):
-                            i = 0 - message_hash
-                        elif message_hash + i == message_hash:
-                            raise IndexError("The database is full")
-                        index_message = index_channel.messages[
-                            message_hash + i
-                        ]
-                    message_content = {
-                        "key": hashed_field,
-                        "record_ids": [
-                            message_id,
-                        ],
-                    }
-                    editable_message = await index_channel.fetch_message(
-                        index_message.id
-                    )
-                    await editable_message.edit(
-                        content=orjson.dumps(message_content).decode("utf-8")
-                    )
-        return message
+                    if (
+                        existing_content != "null"
+                        or existing_content["key"] != hashed_field
+                    ):
+                        sets_list.append(set(existing_content["record_ids"]))
+                        break
+                    else:
+                        i = 1
+                        index_message = index_messages[message_hash + i]
+                        existing_content = orjson.loads(index_message.content)
+                        while (
+                            existing_content == "null"
+                            or message_hash + i != message_hash
+                        ):
+                            i += 1
+                            index_message = index_channel.messages[
+                                message_hash + i
+                            ]
+                            existing_content = orjson.loads(
+                                index_message.content
+                            )
+                            if (message_hash + i) >= len(index_messages):
+                                i = 0 - message_hash
+                            elif (
+                                existing_content != "null"
+                                and existing_content["keys"] == value
+                            ):
+                                sets_list.append(
+                                    set(existing_content["record_ids"])
+                                )
+                                break
+        records_set = set.intersection(*sets_list)
+
+        main_table = await self.guild.fetch_channel(
+            table_metadata["table_channel"]
+        )
+        records = []
+        for record_id in records_set:
+            message = await main_table.fetch_message(record_id)
+            records.append(orjson.loads(message.content))
+
+        return records
 
     def _get_table_metadata(self, table_name: str) -> dict | None:
         """

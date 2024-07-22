@@ -44,7 +44,7 @@ async def test_creation(database: discobase.Database, bot: discord.Client):
 
 async def test_metadata_channel(database: discobase.Database):
     assert database._metadata_channel is not None
-    assert database._metadata_channel.name == f"{database.name}_metadata"
+    assert database._metadata_channel.name == f"{database.name}_db_metadata"
     assert database.guild is not None
     found: bool = False
 
@@ -122,7 +122,7 @@ async def test_add_record(database: discobase.Database):
 
     test_record = TestTable(username="rubiks14", password="secretPassword")
     message = await database._add_record(test_record)
-    assert message.content == test_record.model_dump_json()
+    assert orjson.loads(message.content)["content"] == test_record.model_dump()
 
     table_metadata = database._get_table_metadata(TestTable.__name__.lower())
 
@@ -134,24 +134,16 @@ async def test_add_record(database: discobase.Database):
                     for channel in database.guild.channels
                     if channel.id == id
                 ][0]
-                print(f"Channel ID {index_channel.id}")
                 index_messages = [
                     message
                     async for message in index_channel.history(
                         limit=table_metadata["max_records"]
                     )
                 ]
-                sorted(index_messages, key=lambda message: message.id)
                 hashed_field = hash(value)
                 message_hash = (hashed_field & 0x7FFFFFFF) % table_metadata[
                     "max_records"
                 ]
-                print(
-                    f"{value}'s hash in test: {hashed_field}, message_hash: {message_hash}"
-                )
-                print(
-                    f"{value}'s message id in test: {index_messages[message_hash].id}"
-                )
                 existing_content = orjson.loads(
                     index_messages[message_hash].content
                 )
@@ -159,4 +151,22 @@ async def test_add_record(database: discobase.Database):
                 assert message.id in existing_content["record_ids"]
                 break
 
-    await database._delete_table(TestTable.__name__.lower())
+
+async def test_find_records(database: discobase.Database):
+    @database.table
+    class TestTable(discobase.Table):
+        username: str
+        password: str
+
+    await database._create_table(TestTable, initial_hash_size=4)
+
+    test_record = TestTable(username="rubiks14", password="secretPassword")
+    test_record2 = TestTable(username="rubberduck", password="secretPassword")
+    await database._add_record(test_record)
+    await database._add_record(test_record2)
+
+    found_records = await database._find_records(
+        "testtable", username="rubiks14", password="secretPassword"
+    )
+
+    assert len(found_records) == 1
