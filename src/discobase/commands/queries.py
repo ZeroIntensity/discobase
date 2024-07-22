@@ -8,13 +8,15 @@ class DatabaseQueries(app_commands.Group):
     All the slash commands for querying information from the database.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @app_commands.command()
-    @app_commands.describe(table='Choose the database you want to perform an update on.',
-                           field='Choose the key you want to update.',
-                           new_value="Your new information.")
+    @app_commands.describe(
+        table='Choose the database you want to perform an update on.',
+        field='Choose the key you want to update.',
+        new_value="Your new information."
+    )
     async def update(
         self,
         inter: discord.Interaction,
@@ -48,5 +50,5 @@ class DatabaseCog(commands.Cog):
         self.bot.tree.add_command(DatabaseQueries(name="query"))
 
 
-async def setup(bot) -> None:
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DatabaseQueries(bot))
