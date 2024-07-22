@@ -169,8 +169,10 @@ class Database:
         Returns:
             Created `asyncio.Task` object. Note that the database
             will store this internally, so you don't have to worry
-            about `await`ing it later. In most cases, you don't need
-            the returned `asyncio.Task` object.
+            about losing the reference. By default, this task will
+            never get `await`ed, so this function will not keep the
+            event loop running. If you want to keep the event loop running,
+            make sure to `await` the returned task object later.
 
         Example:
             ```py
@@ -182,8 +184,10 @@ class Database:
 
             async def main():
                 db = discobase.Database("test")
-                dv.login_task("...")
-
+                db.login_task("...")
+                await db.wait_ready()
+                # ...
+                await db  # Keep the event loop running
 
             asyncio.run(main())
             ```
