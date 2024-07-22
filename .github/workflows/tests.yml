@@ -4,6 +4,9 @@ on:
     push:
         branches:
             - main
+    pull_request:
+        branches:
+            - main
 
 concurrency:
     group: test-${{ github.head_ref }}
@@ -18,17 +21,17 @@ jobs:
     run-container-matrix:
         name: Test matrix on Linux
         runs-on: ubuntu-latest
-    
+
         steps:
-        - uses: actions/checkout@v3
-    
-        - name: Set up Python 3.12
-          uses: actions/setup-python@v4
-          with:
-            python-version: '3.12'
-    
-        - name: Install Hatch
-          run: pip install --upgrade hatch
-    
-        - name: Run tests in matrix
-          run: hatch test --all
+            - uses: actions/checkout@v3
+
+            - name: Set up Python 3.12
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.12"
+
+            - name: Install Hatch
+              run: pip install --upgrade hatch
+
+            - name: Run tests in matrix
+              run: hatch test --all
