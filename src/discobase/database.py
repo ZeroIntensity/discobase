@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from threading import Thread
 from typing import Type, TypeVar
 
 import discord
@@ -145,7 +144,15 @@ class Database:
     async def login(self, bot_token: str) -> None:
         """
         Start running the bot.
+
+        Args:
+            bot_token: Discord API bot token to log in with.
         """
+        if self.open:
+            raise RuntimeError(
+                "connection is already open, did you call login() twice?"
+            )
+
         # We use _set_open() with a gather to keep a finer link
         # between the `open` attribute and whether it's actually
         # running.
@@ -165,8 +172,10 @@ class Database:
         Returns:
             Created `asyncio.Task` object. Note that the database
             will store this internally, so you don't have to worry
-            about `await`ing it later. In most cases, you don't need
-            the returned `asyncio.Task` object.
+            about losing the reference. By default, this task will
+            never get `await`ed, so this function will not keep the
+            event loop running. If you want to keep the event loop running,
+            make sure to `await` the returned task object later.
 
         Example:
             ```py
@@ -178,8 +187,10 @@ class Database:
 
             async def main():
                 db = discobase.Database("test")
-                dv.login_task("...")
-
+                db.login_task("...")
+                await db.wait_ready()
+                # ...
+                await db  # Keep the event loop running
 
             asyncio.run(main())
             ```
@@ -196,6 +207,7 @@ class Database:
             raise ValueError(
                 "cannot close a connection that is not open",
             )
+        self.open = False
         await self.bot.close()
 
     @asynccontextmanager
@@ -234,35 +246,6 @@ class Database:
             yield
         finally:
             await self.close()
-
-    def login_thread(
-        self,
-        bot_token: str,
-        *,
-        daemon: bool = False,
-        autostart: bool = True,
-    ) -> Thread:
-        """
-        Run the bot in a seperate thread.
-
-        Args:
-            bot_token: Discord API bot token.
-            daemon: Equivalent to `daemon` parameter in `threading.Thread`
-            autostart: Whether to automatically call `start`
-
-        Returns:
-            The `Thread` instance used to start the bot.
-        """
-        thread = Thread(
-            target=asyncio.run,
-            args=(self.login(bot_token),),
-            daemon=daemon,
-        )
-
-        if autostart:
-            thread.start()
-
-        return thread
 
     def table(self, clas: T) -> T:
         if not issubclass(clas, Table):
