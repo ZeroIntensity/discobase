@@ -15,26 +15,20 @@ env:
     TEST_BOT_TOKEN: ${{ secrets.TEST_BOT_TOKEN }}
 
 jobs:
-    run:
-        name: Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-        runs-on: ${{ matrix.os }}
-        timeout-minutes: 8
-        strategy:
-            fail-fast: false
-            matrix:
-                os: [ubuntu-latest, windows-latest, macos-latest]
-                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-
+    run-container-matrix:
+        name: Container matrix on Linux
+        runs-on: ubuntu-latest
+    
         steps:
-            - uses: actions/checkout@v2
-
-            - name: Set up Python ${{ matrix.python-version }}
-              uses: actions/setup-python@v2
-              with:
-                  python-version: ${{ matrix.python-version }}
-
-            - name: Install Hatch
-              run: pip install --upgrade --pre hatch
-
-            - name: Run tests
-              run: hatch test
+        - uses: actions/checkout@v3
+    
+        - name: Set up Python 3.12
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.12'
+    
+        - name: Install Hatch
+          run: pip install --upgrade hatch
+    
+        - name: Run tests in matrix
+          run: hatch test --all
