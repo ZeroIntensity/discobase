@@ -16,7 +16,7 @@ env:
 
 jobs:
     run-container-matrix:
-        name: Container matrix on Linux
+        name: Test matrix on Linux
         runs-on: ubuntu-latest
     
         steps:
