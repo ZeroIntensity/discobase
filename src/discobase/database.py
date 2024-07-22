@@ -60,7 +60,7 @@ class Database:
             await self.bot.load_extension(module.name)
 
         await self.bot.tree.sync()
-        
+
         await self.bot.wait_until_ready()
         found_guild: discord.Guild | None = None
         for guild in self.bot.guilds:
