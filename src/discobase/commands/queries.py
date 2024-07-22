@@ -12,9 +12,11 @@ class DatabaseQueries(app_commands.Group):
         self.bot = bot
 
     @app_commands.command()
-    @app_commands.describe(table='Choose the database you want to perform an update on.',
-                           field='Choose the key you want to update.',
-                           new_value="Your new information.")
+    @app_commands.describe(
+        table='Choose the database you want to perform an update on.',
+        field='Choose the key you want to update.',
+        new_value="Your new information."
+    )
     async def update(
         self,
         inter: discord.Interaction,
