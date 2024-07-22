@@ -6,9 +6,9 @@ from threading import Thread
 from typing import Type, TypeVar
 
 import discord
-from discord.ext import commands
 import orjson
 
+from discord.ext import commands
 from .table import Table
 
 __all__ = ("Database",)
@@ -29,7 +29,9 @@ class Database:
         """
         self.name = name
         """Name of the Discord-database server."""
-        self.bot = commands.Bot(intents=discord.Intents.all(), command_prefix="!")
+        self.bot = commands.Bot(
+            intents=discord.Intents.all(), command_prefix="!"
+        )
         """discord.py `Bot` instance."""
         self.guild: discord.Guild | None = None
         """discord.py `Guild` used as the database server."""
