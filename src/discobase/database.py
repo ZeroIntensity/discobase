@@ -92,7 +92,7 @@ class Database:
 
     async def _create_table(
         self, table: type[Table], initial_hash_size: int = 16
-    ) -> None:
+    ) -> discord.Message:
         """
         Creates a new table and all index tables that go with it.
         This writes the table metadata.
@@ -102,6 +102,10 @@ class Database:
         Args:
             table: Table schema to create channels for.
             initial_hash_size: the size the index hash tables should start at.
+
+        Returns:
+            The `discord.Message` containing all of the metadata for the table. This
+            can be useful for testing or returning the data back to the user
         """
 
         if self.guild is None:
@@ -114,19 +118,19 @@ class Database:
                 # The table is already set up, no need to do anything more.
                 return
         primary_table = await self.guild.create_text_channel(name)
-        index_tables: set[discord.TextChannel] = set()
+        index_channels: dict[str, int] = dict()
         for key_name in table.__disco_keys__:
             index_channel = await self.guild.create_text_channel(
                 f"{name}_{key_name}"
             )
-            index_tables.add(index_channel)
+            index_channels[index_channel.name] = index_channel.id
             await self._resize_hash(index_channel, initial_hash_size)
 
         table_metadata = {
             "name": name,
             "keys": tuple(table.__disco_keys__),
             "table_channel": primary_table.id,
-            "index_channels": [index_table.id for index_table in index_tables],
+            "index_channels": index_channels,
             "current_records": 0,
             "max_records": initial_hash_size,
         }
@@ -138,7 +142,39 @@ class Database:
                 "(internal error) expected _metadata_channel to be non-None"
             )
 
-        await self._metadata_channel.send(message_text)
+        return await self._metadata_channel.send(message_text)
+
+    async def _delete_table(self, table_name: str):
+        """
+        Deletes the table and all associated tables.
+        This also removes the table metadata
+        """
+
+        table_name = table_name.lower()
+
+        new_table_set: set[type[Table]] = set()
+        for table in self.tables:
+            if table.__name__.lower() != table_name:
+                new_table_set.add(table)
+        self.tables = new_table_set
+
+        # This makes sure to only delete channels that relate to the table that is represented by table_name
+        # and not channels that contain table_name as a substring of the full name
+        for channel in self.guild.channels:
+            split_channel_name = channel.name.lower().split("_")
+            if split_channel_name[0].lower() == table_name:
+                await channel.delete()
+
+        metadata_messages = [
+            message async for message in self._metadata_channel.history()
+        ]
+        for message in metadata_messages:
+            table_metadata = orjson.loads(message.content)
+            if table_metadata["name"] == table_name:
+                message_to_delete = await self._metadata_channel.fetch_message(
+                    message.id
+                )
+                await message_to_delete.delete()
 
     async def _resize_hash(
         self, index_channel: discord.TextChannel, hash_size

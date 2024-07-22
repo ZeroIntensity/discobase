@@ -70,22 +70,45 @@ async def test_create_table(
     assert database.guild is not None
     assert database._metadata_channel is not None
     hash_size = 1
-    await database._create_table(test_table, initial_hash_size=hash_size)
-    names = [channel.name for channel in database.guild.channels]
-
-    table_metadata = orjson.loads(
-        database._metadata_channel.last_message.content
+    metadata_message = await database._create_table(
+        test_table, initial_hash_size=hash_size
     )
+
+    table_metadata = orjson.loads(metadata_message.content)
     assert table_metadata["max_records"] == hash_size
+
+    for id in table_metadata["index_channels"].values():
+        channel = database.guild.get_channel(id)
+        assert isinstance(channel, discord.TextChannel)
+        messages = [message async for message in channel.history()]
+        assert len(messages) == hash_size
+
+    names = [channel.name for channel in database.guild.channels]
 
     for table in database.tables:
         for key in table.__disco_keys__:
             assert f"{table.__name__.lower()}_{key.lower()}" in names
 
-    for index_id in table_metadata["index_channels"]:
-        channel: discord.abc.GuildChannel = database.guild.get_channel(
-            index_id
-        )
-        assert isinstance(channel, discord.TextChannel)
-        messages = [message async for message in channel.history()]
-        assert len(messages) == hash_size
+
+async def test_delete_table(
+    database: discobase.Database, test_table: discobase.Table
+):
+    await database._create_table(test_table, initial_hash_size=0)
+    database._metadata_channel = database.guild.get_channel(
+        database._metadata_channel.id
+    )
+    names = [channel.name for channel in database.guild.channels]
+    name_of_table_to_delete = list(database.tables)[0].__name__.lower()
+    assert name_of_table_to_delete in names
+    await database._delete_table(name_of_table_to_delete)
+
+    updated_names = [channel.name for channel in database.guild.channels]
+    for name in updated_names:
+        assert name.find(name_of_table_to_delete) != 0
+
+    assert len(database.tables) == 0
+
+    async for message in database._metadata_channel.history():
+        table_metadata = orjson.loads(message.content)
+        assert isinstance(table_metadata, dict)
+        assert table_metadata["name"] != name_of_table_to_delete
