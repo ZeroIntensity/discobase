@@ -5,6 +5,8 @@ repo_name: ZeroIntensity/discobase
 
 nav:
     - Home: index.md
+    - Introduction: introduction.md
+    - Discord Interface: discord_interface.md
     - API Reference: reference.md
 
 theme:

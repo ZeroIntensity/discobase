@@ -70,9 +70,28 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+Note that while the `asyncio.Task` object returned by `login_task` is "free-flying," it does _not_ force the event loop to stay open indefinitely. To keep the connection alive, you must `await` the task:
+
+```py
+import discobase
+import asyncio
+
+db = discobase.Database("My discord database")
+
+async def main():
+    task = db.login_task("My bot token...")
+    await db.wait_ready()
+    # We can now safely use the database!
+    # ...
+    await task  # Keeps the connection open
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 `login_task` and `wait_ready` might suffice, depending on your application, but in many cases you might want to connect and disconnect, without running for the lifetime of the program.
 
-For this use case, you want to use `conn()`, which is an [asynchronous context manager](https://docs.python.org/3/reference/datamodel.html#async-context-managers). This method calls `wait_ready()` for you, so you assume that the database is connected while in the `async with` block:
+For this use case, instead of just `login_task` followed by `wait_ready`, you want to use `conn()`, which is an [asynchronous context manager](https://docs.python.org/3/reference/datamodel.html#async-context-managers). This method calls `wait_ready()` for you, so you assume that the database is connected while in the `async with` block:
 
 ```py
 import discobase
@@ -88,6 +107,61 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Unlike `login_task`, this will not keep the connection alive infinitely.
-
 ## Tables
+
+Now that your database is ready to go, let's make a table. Discobase uses [Pydantic](https://docs.pydantic.dev/latest/) to define schemas, through the `discobase.Table` type, which is, more or less, a drop in for `pydantic.BaseModel`:
+
+```py
+import discobase
+
+db = discobase.Database("My discord database")
+
+class User(discobase.Table):
+    name: str
+    password: str
+```
+
+However, we forgot something in the above example! `discobase.Table` only allows use of `User` as a schema, but the database still needs to know that it exists. We can do this via the `table` decorator:
+
+```py
+import discobase
+
+db = discobase.Database("My discord database")
+
+@db.table
+class User(discobase.Table):
+    name: str
+    password: str
+```
+
+Great, now `User` is visible to our `Database` object! Now, let's write to the database -- we can do this via calling `save()` on an instance:
+
+```py
+import discobase
+import asyncio
+
+db = discobase.Database("My discord database")
+
+@db.table
+class User(discobase.Table):
+    name: str
+    password: str
+
+async def main():
+    async with db.conn("My bot token..."):
+        user = User(name="Peter", password="foobar")
+        await user.save()  # Saves this record to the database
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+We can look up an instance of it via `find` (or `find_unique`, if you want a unique database entry):
+
+```py
+async def main():
+    async with db.conn("My bot token..."):
+        users = User.find(name="Peter")
+        for user in users:
+            print(f"Name: {user.name}, password: {user.password}")
+```
