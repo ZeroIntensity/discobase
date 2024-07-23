@@ -47,5 +47,5 @@ class Utility(commands.Cog):
         )
 
 
-async def setup(bot) -> None:
+async def setup(bot: commands.bot) -> None:
     await bot.add_cog(Utility(bot))
