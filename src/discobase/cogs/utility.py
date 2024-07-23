@@ -5,7 +5,7 @@ from discord.ext import commands
 
 class Utility(commands.Cog):
     """
-    Commands to alter the database.
+    All the slash commands for querying information from the database.
     """
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
