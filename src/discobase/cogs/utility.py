@@ -31,17 +31,12 @@ class Utility(commands.Cog):
         row="The row in which the data is to be edited.",
         new_data="The new data that replaces the old data."
     )
-    async def edit(self, interaction: discord.Interaction, table: str, column: str, row: int,
-                   new_data: str) -> None:
-        """
-        Discord slash command that edits a piece of pre-existing data in a table.
-
-        :param interaction: Represents a Discord interaction.
-        :param table: The table which the data is to be edited.
-        :param column: The column in which the data is to be edited.
-        :param row: The row in which the data is to be edited.
-        :param new_data: The new data that replaces the old data.
-        """
+    async def insert(
+        self,
+        interaction: discord.Interaction,
+        table: discord.channel,
+        data: str
+    ) -> None:
         await interaction.response.send_message(
             f"I have edited data in table `{table}` / column `{column}` / row `{row}` to `{new_data}`."
         )
