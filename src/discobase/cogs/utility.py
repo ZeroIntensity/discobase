@@ -20,7 +20,7 @@ class Utility(commands.Cog):
         self,
         interaction: discord.Interaction,
         table: discord.TextChannel,
-        data: str
+        data: str,
     ) -> None:
         await interaction.response.send_message(
             f"I have inserted `{data}` into `{table}` table."
@@ -30,14 +30,14 @@ class Utility(commands.Cog):
     @app_commands.describe(
         table='Choose the database you want to perform an update on.',
         field='Choose the key you want to update.',
-        new_value="Your new information."
+        new_value="Your new information.",
     )
     async def update(
         self,
         inter: discord.Interaction,
         table: discord.TextChannel,
         field: str,
-        new_value: str
+        new_value: str,
      ) -> None:
         pass
 
@@ -48,7 +48,7 @@ class Utility(commands.Cog):
         inter: discord.Integration,
         first_table: discord.TextChannel,
         second_table: discord.TextChannel,
-        key: str
+        key: str,
     ) -> None:
         pass
 
