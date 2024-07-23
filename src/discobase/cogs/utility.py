@@ -13,10 +13,8 @@ class Utility(commands.Cog):
 
     @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
-        table="The table which the data is to be edited.",
-        column="The column in which the data is to be edited.",
-        row="The row in which the data is to be edited.",
-        new_data="The new data that replaces the old data."
+        table="Choose the table you want to insert the data into.",
+        data="The data that is to be inserted."
     )
     async def insert(
         self,
