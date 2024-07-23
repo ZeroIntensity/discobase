@@ -6,7 +6,8 @@ import secrets
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from threading import Thread
-from typing import Coroutine, Dict, Hashable, List, NoReturn, Type, TypeVar
+from typing import (Any, Coroutine, Dict, Hashable, List, NoReturn, Type,
+                    TypeVar)
 
 import discord
 from discord.ext import commands
@@ -348,11 +349,10 @@ class Database:
             # TODO: Resize the table here
             raise IndexError("The table is full")
 
-        metadata_message = await self._metadata_channel.fetch_message(
-            table_metadata.message_id
-        )
-        metadata_message = await metadata_message.edit(
-            content=table_metadata.model_dump_json()
+        await self._edit_message(
+            self._metadata_channel,
+            table_metadata.message_id,
+            table_metadata.model_dump_json(),
         )
 
         record_data = _Record(
@@ -369,7 +369,7 @@ class Database:
 
         for field, value in record.model_dump().items():
             for name, cid in table_metadata.index_channels.items():
-                if name.lower().split("_")[1] == field.lower():
+                if name.lower().split("_", maxsplit=1)[1] != field.lower():
                     continue
 
                 index_channel: discord.TextChannel = self._find_channel(cid)
@@ -399,7 +399,6 @@ class Database:
                         messages[target_index].id,
                         content=message_content.model_dump_json(),
                     )
-
                 elif serialized_content.key == hashed_field:
                     # This already exists, let's append to the data
                     serialized_content.record_ids.append(message.id)
@@ -427,9 +426,11 @@ class Database:
 
         return await message.edit(content=record_data.model_dump_json())
 
-    async def _find_records(self, table_name: str, **kwargs) -> list[dict]:
+    async def _find_records(
+        self, table_name: str, kwargs: dict[str, Any]
+    ) -> list[dict]:
         """
-        Finds a record based on field values
+        Find a record based on the specified field values.
         """
 
         if not self.guild:
@@ -447,17 +448,7 @@ class Database:
                 if name.lower().split("_")[1] != field.lower():
                     continue
 
-                index_channel = [
-                    channel
-                    for channel in self.guild.channels
-                    if channel.id == cid
-                ][0]
-
-                if not isinstance(index_channel, discord.TextChannel):
-                    raise DatabaseCorruptionError(
-                        f"expected {index_channel!r} to be a TextChannel"
-                    )
-
+                index_channel: discord.TextChannel = self._find_channel(cid)
                 index_messages = [
                     message
                     async for message in index_channel.history(
@@ -468,44 +459,17 @@ class Database:
                 content: str = index_messages[target_index].content
                 serialized_content = _IndexableRecord.from_message(content)
 
-                if (
-                    serialized_content
-                    and serialized_content.key != hashed_field
-                ):
+                if not serialized_content:
+                    # Nothing was found
+                    continue
+
+                if serialized_content.key == hashed_field:
                     sets_list.append(set(serialized_content.record_ids))
-                    break
                 else:
-                    offset = 1
-                    index_message = index_messages[target_index + offset]
-                    serialized_content = (
-                        _IndexableRecord.model_validate_json(
-                            index_message.content
-                        )
-                        if index_message.content != "null"
-                        else None
+                    raise DatabaseCorruptionError(
+                        "not implemented: hash collision"
                     )
-                    while (
-                        not serialized_content
-                        or target_index + offset != target_index
-                    ):
-                        offset += 1
-                        index_message = index_messages[target_index + offset]
-                        serialized_content = (
-                            _IndexableRecord.model_validate_json(
-                                index_message.content
-                            )
-                            if index_message.content != "null"
-                            else None
-                        )
-                        if (target_index + offset) >= len(index_messages):
-                            offset = 0 - target_index
-                        elif (
-                            serialized_content is not None
-                            and serialized_content.keys == value
-                        ):
-                            sets_list.append(set(serialized_content.record_ids))
-                            break
-        records_set = set.intersection(*sets_list)
+                    # content: str = index_messages[target_index].content
 
         main_table = await self.guild.fetch_channel(
             table_metadata.table_channel
@@ -515,10 +479,17 @@ class Database:
                 f"expected {main_table!r} to be a TextChannel"
             )
 
+        table = self._tables[table_name]
         records = []
-        for record_id in records_set:
-            message = await main_table.fetch_message(record_id)
-            records.append(orjson.loads(message.content))
+        for record_ids in sets_list:
+            for record_id in record_ids:
+                message = await main_table.fetch_message(record_id)
+                record = _Record.model_validate_json(message.content)
+                records.append(
+                    table.model_validate_json(
+                        urlsafe_b64decode(record.content),
+                    )
+                )
 
         return records
 
