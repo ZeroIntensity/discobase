@@ -11,13 +11,13 @@ import discobase
 async def database():
     db = discobase.Database("test")
     db.login_task(os.environ["TEST_BOT_TOKEN"])
+    await db.wait_ready()
     if db.guild:
         await db.guild.delete()
         db.guild = None
         await db.init()
 
     try:
-        await db.wait_ready()
         yield db
     finally:
         await db.close()
