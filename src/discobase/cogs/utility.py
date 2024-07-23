@@ -38,7 +38,7 @@ class Utility(commands.Cog):
         data: str
     ) -> None:
         await interaction.response.send_message(
-            f"I have edited data in table `{table}` / column `{column}` / row `{row}` to `{new_data}`."
+            f"I have inserted `{data}` into `{table}` table."
         )
 
     @app_commands.command(description="Modifies a record with a new value.")
