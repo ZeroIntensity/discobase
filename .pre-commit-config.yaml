@@ -15,7 +15,6 @@ repos:
     rev: v0.5.3
     hooks:
       - id: ruff
-      - id: ruff-format
 
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
