@@ -4,3 +4,7 @@ class DiscobaseError(Exception):
 
 class NotConnectedError(DiscobaseError):
     """The database is not connected."""
+
+
+class DatabaseCorruptionError(DiscobaseError):
+    """The database was corrupted somehow."""

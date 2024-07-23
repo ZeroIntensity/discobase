@@ -1,19 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from threading import Thread
-from typing import NoReturn, Type, TypeVar
+from typing import Coroutine, Dict, NoReturn, Type, TypeVar
 
 import discord
-import orjson
 from discord.ext import commands
+from pydantic import BaseModel
 
+from ._metadata import Metadata
+from .exceptions import DatabaseCorruptionError, NotConnectedError
 from .table import Table
 
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
+
+
+class _Record(BaseModel):
+    content: str
+    """Base64 encoded Pydantic model dump of the record."""
+    indexes: Dict
+    record_ids: list[int]
 
 
 class Database:
@@ -41,8 +51,8 @@ class Database:
         """Whether the database is connected."""
         self._metadata_channel: discord.TextChannel | None = None
         """discord.py `TextChannel` that acts as the metadata channel."""
-        self._database_metadata: list[dict] = []
-        """a list containing all of the table metadata entries"""
+        self._database_metadata: dict[str, Metadata] = {}
+        """A dictionary containing all of the table `Metadata` entries"""
         self._task: asyncio.Task[None] | None = None
         # We need to keep a strong reference to the free-flying
         # task
@@ -54,7 +64,7 @@ class Database:
 
     @staticmethod
     def _not_connected() -> NoReturn:
-        raise RuntimeError(
+        raise NotConnectedError(
             "not connected to the database, did you forget to login?"
         )
 
@@ -82,20 +92,15 @@ class Database:
                 found_channel = channel
                 break
 
-        table_metadata: list[dict] = []
         if not found_channel:
             self._metadata_channel = await self.guild.create_text_channel(
                 name=metadata_channel_name
             )
         else:
             self._metadata_channel = found_channel
-            self._database_metadata = [
-                orjson.loads(message.content)
-                async for message in self._metadata_channel.history()
-            ]
-
-        if len(table_metadata) > 0:
-            self._load_table_classes(table_metadata)
+            async for message in self._metadata_channel.history():
+                model = Metadata.model_validate_json(message.content)
+                self._database_metadata[model.name] = model
 
         for table in self.tables:
             await self._create_table(table)
@@ -106,25 +111,10 @@ class Database:
         """Wait until the database is ready."""
         await self._setup_event.wait()
 
-    def _load_table_classes(self, table_metadata: list[dict]) -> None:
-        """
-        This reloads all of the Table classes using the metadata from the
-        metadata_channel
-
-        Args:
-            table_metadata: List of dictionary representations of each table's metadata
-              dictionary_keys:
-                name: The table name,
-                keys: a tuple containing the name of all keys(fields) of the table,
-                table_channel: the channel ID that holds the main table,
-                index_channels: a dictionary of (index_channel_name: index_channel_id) key, value pairs
-                current_records: The current number of records in the table,
-                max_records: the max number of records in the table before a resize is required,
-        """
-        pass
-
     async def _create_table(
-        self, table: type[Table], initial_hash_size: int = 16
+        self,
+        table: type[Table],
+        initial_size: int = 16,
     ) -> discord.Message | None:
         """
         Creates a new table and all index tables that go with it.
@@ -139,10 +129,11 @@ class Database:
         Returns:
             The `discord.Message` containing all of the metadata
             for the table. This can be useful for testing or
-            returning the data back to the user.
+            returning the data back to the user. If this is `None`,
+            then the table already existed.
         """
 
-        if self.guild is None:
+        if not self.guild or not self._metadata_channel:
             self._not_connected()
 
         name = table.__name__.lower()
@@ -150,41 +141,39 @@ class Database:
             if channel == name:
                 # The table is already set up, no need to do anything more.
                 return
+
+        # The primary table holds the actual records
         primary_table = await self.guild.create_text_channel(name)
-        index_channels: dict[str, int] = dict()
-        for key_name in table.model_fields.keys():
+        index_channels: dict[str, int] = {}
+
+        for key_name in table.__disco_keys__:
+            # Key channels are stored in
+            # the format of <table_name>_<field_name>
             index_channel = await self.guild.create_text_channel(
                 f"{name}_{key_name}"
             )
             index_channels[index_channel.name] = index_channel.id
-            await self._resize_hash(index_channel, initial_hash_size)
+            await self._resize_hash(index_channel, initial_size)
 
-        table_metadata = {
-            "name": name,
-            "keys": tuple(table.model_fields.keys()),
-            "table_channel": primary_table.id,
-            "index_channels": index_channels,
-            "current_records": 0,
-            "max_records": initial_hash_size,
-        }
-
-        self._database_metadata.append(table_metadata)
-
-        message_text = orjson.dumps(table_metadata).decode("utf-8")
-
-        if not self._metadata_channel:
-            raise TypeError(
-                "(internal error) expected _metadata_channel to be non-None"
-            )
-
-        message = await self._metadata_channel.send(message_text)
-        table_metadata["my_message_id"] = message.id
-
-        return await message.edit(
-            content=orjson.dumps(table_metadata).decode("utf-8")
+        table_metadata = Metadata(
+            name=name,
+            keys=tuple(table.__disco_keys__),
+            table_channel=primary_table.id,
+            index_channels=index_channels,
+            current_records=0,
+            max_records=initial_size,
+            message_id=0,
         )
+        self._database_metadata[name] = table_metadata
+        message = await self._metadata_channel.send(
+            table_metadata.model_dump_json()
+        )
+        # Since Discord generates the message ID, we have to do these
+        # message editing shenanigans.
+        table_metadata.message_id = message.id
+        return await message.edit(content=table_metadata.model_dump_json())
 
-    async def _delete_table(self, table_name: str):
+    async def _delete_table(self, table_name: str) -> None:
         """
         Deletes the table and all associated tables.
         This also removes the table metadata
@@ -194,40 +183,35 @@ class Database:
             self._not_connected()
 
         table_name = table_name.lower()
-
         new_table_set: set[type[Table]] = set()
+
         for table in self.tables:
             if table.__name__.lower() != table_name:
                 new_table_set.add(table)
         self.tables = new_table_set
 
+        coros: list[Coroutine] = []
         # This makes sure to only delete channels that relate to the table
         # that is represented by table_name and not channels that contain
         # table_name as a substring of the full name
         for channel in self.guild.channels:
             split_channel_name = channel.name.lower().split("_")
             if split_channel_name[0].lower() == table_name:
-                await channel.delete()
+                coros.append(channel.delete())
 
-        metadata_messages = [
-            message async for message in self._metadata_channel.history()
-        ]
-
-        # For some reason deleting messages with `await message.delete()` was
-        # not working that is why I fetch the message again to delete it.
-        for message in metadata_messages:
-            table_metadata = orjson.loads(message.content)
-            if table_metadata["name"] == table_name:
+        async for message in self._metadata_channel.history():
+            table_metadata = Metadata.model_validate_json(message.content)
+            # For some reason, deleting messages with `message.delete()` wasn't
+            # working, so we fetch the message again to delete it.
+            if table_metadata.name == table_name:
                 message_to_delete = await self._metadata_channel.fetch_message(
                     message.id
                 )
-                await message_to_delete.delete()
+                coros.append(message_to_delete.delete())
 
-        database_metadata = []
-        for table in self._database_metadata:
-            if table["name"] != table_name:
-                database_metadata.append(table)
-        self._database_metadata = database_metadata
+        # We gather() here for performance
+        await asyncio.gather(*coros)
+        del self._database_metadata[table_name]
 
     async def _add_record(self, record: Table) -> discord.Message:
         """
@@ -236,200 +220,203 @@ class Database:
         Args:
             record: The record object being written to the table
 
-        Return:
+        Returns:
             The `discord.Message` that contains the new entry. This is helpful
             for saving the direct id of the message in memory if wanted and for
             the message.Content
         """
 
-        if not self.guild:
+        if not self.guild or not self._metadata_channel:
             self._not_connected()
 
         table_metadata = self._get_table_metadata(
             record.__class__.__name__.lower()
         )
-        if table_metadata is None:
-            raise TypeError(
-                f"Table({record.__class__.__name__}) does not exist."
-            )
-
-        table_metadata["current_records"] += 1
-        if table_metadata["current_records"] > table_metadata["max_records"]:
+        table_metadata.current_records += 1
+        if table_metadata.current_records > table_metadata.max_records:
             raise IndexError("The table is full")
 
         metadata_message = await self._metadata_channel.fetch_message(
-            table_metadata["my_message_id"]
+            table_metadata.message_id
         )
         metadata_message = await metadata_message.edit(
-            content=orjson.dumps(table_metadata).decode("utf-8")
+            content=table_metadata.model_dump_json()
         )
 
-        record_dict = {}
-        record_dict["content"] = record.model_dump()
-        record_dict["indexes"] = {}
+        record_data = _Record(
+            content=urlsafe_b64encode(
+                record.model_dump_json().encode("utf-8"),
+            ).decode("utf-8"),
+            indexes={},
+        )
 
         main_table = [
             channel
             for channel in self.guild.channels
-            if channel.id == table_metadata["table_channel"]
+            if channel.id == table_metadata.table_channel
         ][0]
 
-        message = await main_table.send(
-            orjson.dumps(record_dict).decode("utf-8")
-        )
+        if not isinstance(main_table, discord.TextChannel):
+            raise DatabaseCorruptionError(
+                f"expected {main_table!r} to be a TextChannel",
+            )
+
+        message = await main_table.send(record_data.model_dump_json())
         message_id = message.id
 
-        for field, value in record_dict["content"].items():
-            for name, id in table_metadata["index_channels"].items():
+        for field, value in record.model_dump().items():
+            for name, cid in table_metadata.index_channels.items():
                 if name.lower().split("_")[1] == field.lower():
-                    index_channel = [
-                        channel
-                        for channel in self.guild.channels
-                        if channel.id == id
-                    ][0]
-                    messages = [
-                        message
-                        async for message in index_channel.history(
-                            limit=table_metadata["max_records"]
-                        )
-                    ]
-                    hashed_field = hash(value)
-                    message_hash = (
-                        hashed_field & 0x7FFFFFFF
-                    ) % table_metadata["max_records"]
-                    content = messages[message_hash].content
-                    existing_content = (
-                        orjson.loads(content) if content != "null" else content
+                    continue
+
+                index_channel = [
+                    channel
+                    for channel in self.guild.channels
+                    if channel.id == cid
+                ][0]
+
+                if not isinstance(index_channel, discord.TextChannel):
+                    raise DatabaseCorruptionError(
+                        f"expected {index_channel!r} to be a TextChannel"
                     )
 
-                    if (
-                        existing_content != "null"
-                        and existing_content["key"] == hashed_field
-                    ):
-                        existing_content["record_ids"].append(message_id)
-                        messages[message_hash].edit(
-                            content=orjson.dumps(existing_content)
-                        )
-                        record_dict["indexes"][field] = messages[
-                            message_hash
-                        ].id
-                    elif existing_content == "null":
-                        message_content = {
-                            "key": hashed_field,
-                            "record_ids": [
-                                message_id,
-                            ],
-                        }
-                        editable_message = await index_channel.fetch_message(
-                            messages[message_hash].id
-                        )
-                        await editable_message.edit(
-                            content=orjson.dumps(message_content).decode(
-                                "utf-8"
-                            )
-                        )
-                        record_dict["indexes"][field] = editable_message.id
-                    else:
-                        i = 1
-                        index_message = messages[message_hash + i]
-                        while index_message.content != "null":
-                            i += 1
-                            if (message_hash + i) >= len(messages):
-                                i = 0 - message_hash
-                            elif message_hash + i == message_hash:
-                                raise IndexError("The database is full")
-                            index_message = index_channel.messages[
-                                message_hash + i
-                            ]
-                        message_content = {
-                            "key": hashed_field,
-                            "record_ids": [
-                                message_id,
-                            ],
-                        }
-                        editable_message = await index_channel.fetch_message(
-                            index_message.id
-                        )
-                        await editable_message.edit(
-                            content=orjson.dumps(message_content).decode(
-                                "utf-8"
-                            )
-                        )
-                        record_dict["indexes"][field] = editable_message.id
-                        break
-        return await message.edit(
-            content=orjson.dumps(record_dict).decode("utf-8")
-        )
+                messages = [
+                    message
+                    async for message in index_channel.history(
+                        limit=table_metadata.max_records
+                    )
+                ]
+                hashed_field = hash(value)
+                message_hash = (
+                    hashed_field & 0x7FFFFFFF
+                ) % table_metadata.message_id
+                content = messages[message_hash].content
+                serialized_content: Table | None = (
+                    record.model_validate_json(urlsafe_b64decode(content))
+                    if content != "null"
+                    else None
+                )
+
+                if not serialized_content:
+                    # This is a null entry, we can just update in place
+                    message_content = {
+                        "key": hashed_field,
+                        "record_ids": [
+                            message_id,
+                        ],
+                    }
+                    editable_message = await index_channel.fetch_message(
+                        messages[message_hash].id
+                    )
+                    await editable_message.edit(
+                        content=orjson.dumps(message_content).decode("utf-8")
+                    )
+                    record_data.indexes[field] = editable_message.id
+
+                elif serialized_content.key == hashed_field:
+                    existing_content["record_ids"].append(message_id)
+                    messages[message_hash].edit(
+                        content=orjson.dumps(existing_content).decode("utf-8")
+                    )
+                    record_dict["indexes"][field] = messages[message_hash].id
+                else:
+                    index = 1
+                    index_message = messages[message_hash + index]
+                    while index_message.content != "null":
+                        index += 1
+                        if (message_hash + index) >= len(messages):
+                            index = 0 - message_hash
+                        elif message_hash + index == message_hash:
+                            raise IndexError("The database is full")
+
+                        index_message = index_channel.messages[
+                            message_hash + index
+                        ]
+                    message_content = {
+                        "key": hashed_field,
+                        "record_ids": [
+                            message_id,
+                        ],
+                    }
+                    editable_message = await index_channel.fetch_message(
+                        index_message.id
+                    )
+                    await editable_message.edit(
+                        content=orjson.dumps(message_content).decode("utf-8")
+                    )
+                    record_dict["indexes"][field] = editable_message.id
+                    break
+        return await message.edit(content=record_data.model_dump_json())
 
     async def _find_records(self, table_name: str, **kwargs) -> list[dict]:
         """
         Finds a record based on field values
         """
 
-        table_metadata = self._get_table_metadata(table_name.lower())
+        if not self.guild:
+            self._not_connected()
 
+        table_metadata = self._get_table_metadata(table_name.lower())
         sets_list: list[set[int]] = []
 
         for field, value in kwargs.items():
-            if field not in table_metadata["keys"]:
+            if field not in table_metadata.keys:
                 raise AttributeError(
-                    f"Table '{table_metadata["name"]}' has no '{field}' attribute"
+                    f"Table '{table_metadata.name}' has no '{field}' attribute"
                 )
             for name, id in table_metadata["index_channels"].items():
-                if name.lower().split("_")[1] == field.lower():
-                    index_channel = [
-                        channel
-                        for channel in self.guild.channels
-                        if channel.id == id
-                    ][0]
-                    index_messages = [
-                        message
-                        async for message in index_channel.history(
-                            limit=table_metadata["max_records"]
-                        )
-                    ]
-                    hashed_field = hash(value)
-                    message_hash = (
-                        hashed_field & 0x7FFFFFFF
-                    ) % table_metadata["max_records"]
-                    existing_content = orjson.loads(
-                        index_messages[message_hash].content
+                if name.lower().split("_")[1] != field.lower():
+                    continue
+
+                index_channel = [
+                    channel
+                    for channel in self.guild.channels
+                    if channel.id == id
+                ][0]
+                index_messages = [
+                    message
+                    async for message in index_channel.history(
+                        limit=table_metadata["max_records"]
                     )
-                    if (
-                        existing_content != "null"
-                        or existing_content["key"] != hashed_field
+                ]
+                hashed_field = hash(value)
+                message_hash = (hashed_field & 0x7FFFFFFF) % table_metadata[
+                    "max_records"
+                ]
+                existing_content = orjson.loads(
+                    index_messages[message_hash].content
+                )
+                if (
+                    existing_content != "null"
+                    or existing_content["key"] != hashed_field
+                ):
+                    sets_list.append(set(existing_content["record_ids"]))
+                    break
+                else:
+                    i = 1
+                    index_message = index_messages[message_hash + i]
+                    existing_content = orjson.loads(index_message.content)
+                    while (
+                        existing_content == "null"
+                        or message_hash + i != message_hash
                     ):
-                        sets_list.append(set(existing_content["record_ids"]))
-                        break
-                    else:
-                        i = 1
-                        index_message = index_messages[message_hash + i]
+                        i += 1
+                        index_message = index_channel.messages[message_hash + i]
                         existing_content = orjson.loads(index_message.content)
-                        while (
-                            existing_content == "null"
-                            or message_hash + i != message_hash
+                        if (message_hash + i) >= len(index_messages):
+                            i = 0 - message_hash
+                        elif (
+                            existing_content != "null"
+                            and existing_content["keys"] == value
                         ):
-                            i += 1
-                            index_message = index_channel.messages[
-                                message_hash + i
-                            ]
-                            existing_content = orjson.loads(
-                                index_message.content
+                            sets_list.append(
+                                set(existing_content["record_ids"])
                             )
-                            if (message_hash + i) >= len(index_messages):
-                                i = 0 - message_hash
-                            elif (
-                                existing_content != "null"
-                                and existing_content["keys"] == value
-                            ):
-                                sets_list.append(
-                                    set(existing_content["record_ids"])
-                                )
-                                break
+                            break
         records_set = set.intersection(*sets_list)
 
         main_table = await self.guild.fetch_channel(
-            table_metadata["table_channel"]
+            table_metadata.table_channel
         )
         records = []
         for record_id in records_set:
@@ -438,33 +425,34 @@ class Database:
 
         return records
 
-    def _get_table_metadata(self, table_name: str) -> dict | None:
+    def _get_table_metadata(self, table_name: str) -> Metadata:
         """
-        Gets the table metadata from the database metadata
+        Gets the table metadata from the database metadata.
+        This raises an exception if the table doesn't exist.
 
         Args:
             table_name: name of the table to retrieve
-
-        Returns:
-            dict: The table was found successfully
-            None: The table does not exist
         """
-        for table in self._database_metadata:
-            if table_name.lower() == table["name"]:
-                return table
-        return None
+
+        meta: Metadata = self._database_metadata[table_name]
+        if not meta:
+            raise ValueError(f"table {table_name} does not exist")
+
+        return meta
 
     async def _resize_hash(
-        self, index_channel: discord.TextChannel, amount: int
+        self,
+        index_channel: discord.TextChannel,
+        amount: int,
     ) -> None:
         """
-        Increases the hash for index_channel by amount
+        Increases the hash for `index_channel` by amount
 
         Args:
             index_channel: the channel that contains index data for a database
             amount: the amount to increase the size by
         """
-        for _ in range(0, amount):
+        for _ in range(amount):
             await index_channel.send("null")
 
     # This needs to be async for use in gather()
@@ -507,7 +495,7 @@ class Database:
 
             async def main():
                 db = discobase.Database("test")
-                dv.login_task("...")
+                db.login_task("...")
 
 
             asyncio.run(main())
