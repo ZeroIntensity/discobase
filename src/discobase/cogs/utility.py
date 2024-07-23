@@ -58,6 +58,17 @@ class Utility(commands.Cog):
      ) -> None:
         pass
 
+    @app_commands.command(description="Performs a left-join on two tables.")
+    @app_commands.describe(key="The shared primary key to join the tables on.")
+    async def join(
+        self,
+        inter: discord.Integration,
+        first_table: discord.TextChannel,
+        second_table: discord.TextChannel,
+        key: str
+    ) -> None:
+        pass
+
 
 async def setup(bot: commands.bot) -> None:
     await bot.add_cog(Utility(bot))
