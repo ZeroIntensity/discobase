@@ -14,7 +14,7 @@ class Utility(commands.Cog):
     @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
         table="Choose the table you want to insert the data into.",
-        data="The data that is to be inserted."
+        data="The data that is to be inserted.",
     )
     async def insert(
         self,
@@ -28,8 +28,8 @@ class Utility(commands.Cog):
 
     @app_commands.command(description="Modifies a record with a new value.")
     @app_commands.describe(
-        table='Choose the database you want to perform an update on.',
-        field='Choose the key you want to update.',
+        table="Choose the database you want to perform an update on.",
+        field="Choose the key you want to update.",
         new_value="Your new information.",
     )
     async def update(
@@ -38,7 +38,7 @@ class Utility(commands.Cog):
         table: discord.TextChannel,
         field: str,
         new_value: str,
-     ) -> None:
+    ) -> None:
         pass
 
     @app_commands.command(description="Performs a left-join on two tables.")
