@@ -6,11 +6,11 @@ build-backend = "hatchling.build"
 name = "discobase"
 readme = "README.md"
 license = "MIT"
-dependencies = ["discord.py", "pydantic", "orjson"]
+dependencies = ["discord.py", "pydantic", "typing_extensions"]
 dynamic = ["version"]
 
 [tool.ruff]
-line-length = 79  # PEP 8
+line-length = 79 # PEP 8
 
 [tool.ruff.lint]
 ignore = ["F403"]

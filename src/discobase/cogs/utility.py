@@ -11,6 +11,7 @@ class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
+
     @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
         table="Choose the table you want to insert the data into.",
@@ -53,5 +54,5 @@ class Utility(commands.Cog):
         pass
 
 
-async def setup(bot: commands.bot) -> None:
+async def setup(bot) -> None:
     await bot.add_cog(Utility(bot))
