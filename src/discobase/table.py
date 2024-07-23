@@ -15,6 +15,7 @@ __all__ = ("Table",)
 class Table(BaseModel):
     __disco_database__: ClassVar[Optional[Database]] = None
     __disco_keys__: ClassVar[Set[str]] = set()
+    __disco_name__: ClassVar[str] = "_notset"
 
     def _ensure_db(self) -> None:
         if not self.__disco_database__:
@@ -32,3 +33,5 @@ class Table(BaseModel):
         Commit the current object to the database.
         """
         self._ensure_db()
+        assert self.__disco_database__
+        await self.__disco_database__._add_record(self)
