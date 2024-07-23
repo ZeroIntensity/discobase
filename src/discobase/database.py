@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
+from pkgutil import iter_modules
 from typing import (Any, Coroutine, Dict, Hashable, List, NoReturn, Type,
                     TypeVar)
 
@@ -107,6 +108,12 @@ class Database:
         Initializes the database server.
         Generally, you don't want to call this manually.
         """
+        # Load external commands
+        for module in iter_modules(path=["cogs"], prefix="cogs."):
+            await self.bot.load_extension(module.name)
+
+        await self.bot.tree.sync()
+
         await self.bot.wait_until_ready()
         found_guild: discord.Guild | None = None
         for guild in self.bot.guilds:
