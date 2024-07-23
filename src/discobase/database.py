@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Type, TypeVar
 from pkgutil import iter_modules
+from typing import Type, TypeVar
 
 import discord
 import orjson
@@ -56,7 +56,7 @@ class Database:
         Generally, you don't want to call this manually.
         """
         # Load external commands
-        for module in iter_modules(path=['cogs'], prefix='cogs.'):
+        for module in iter_modules(path=["cogs"], prefix="cogs."):
             await self.bot.load_extension(module.name)
 
         await self.bot.tree.sync()

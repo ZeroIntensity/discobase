@@ -1,6 +1,6 @@
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
 
 
 class DatabaseVisualizer(commands.Cog):
@@ -12,11 +12,11 @@ class DatabaseVisualizer(commands.Cog):
         self.bot = bot
 
     @app_commands.command()
-    @app_commands.describe(channel='Choose the database you want to fetch statistics from.')
+    @app_commands.describe(
+        channel="Choose the database you want to fetch statistics from."
+    )
     async def status(
-        self,
-        inter: discord.Interaction,
-        channel: discord.TextChannel
+        self, inter: discord.Interaction, channel: discord.TextChannel
     ) -> None:
         """
         Displays general statistics.
@@ -24,11 +24,11 @@ class DatabaseVisualizer(commands.Cog):
         pass
 
     @app_commands.command()
-    @app_commands.describe(table='Choose the database you want to retrieve the schema from.')
+    @app_commands.describe(
+        table="Choose the database you want to retrieve the schema from."
+    )
     async def schema(
-        self,
-        inter: discord.Interaction,
-        table: discord.TextChannel
+        self, inter: discord.Interaction, table: discord.TextChannel
     ) -> None:
         """
         Fetches the schema of the channel.
