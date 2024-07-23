@@ -7,6 +7,7 @@ class Utility(commands.Cog):
     """
     All the slash commands for querying information from the database.
     """
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
