@@ -13,7 +13,7 @@ __all__ = ("Table",)
 
 # Note that we can't use 3.10+ type[] syntax
 # here, since Pydantic can't handle it
-class Table(BaseModel, frozen=True):
+class Table(BaseModel):
     __disco_database__: ClassVar[Optional[Database]] = None
     __disco_keys__: ClassVar[Set[str]] = set()
     __disco_name__: ClassVar[str] = "_notset"

@@ -18,5 +18,3 @@ class Metadata(BaseModel):
     """Capacity of the table (i.e. the "maximum records" that is can hold)."""
     message_id: int
     """ID of the metadata message."""
-    hash_seed: int
-    """Seed for the hash() function."""

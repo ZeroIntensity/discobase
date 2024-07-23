@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import secrets
+import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from threading import Thread
@@ -127,9 +126,18 @@ class Database:
             model = Metadata.model_validate_json(message.content)
             self._database_metadata[model.name] = model
 
-        await asyncio.gather(
-            *[self._create_table(table) for table in self._tables.values()]
-        )
+        tasks = [
+            asyncio.create_task(self._create_table(table))
+            for table in self._tables.values()
+        ]
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            print(e)
+            for task in tasks:
+                task.cancel()
+
+            raise e
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
 
@@ -212,7 +220,12 @@ class Database:
         return index_channel.name, index_channel.id
 
     def _hash(self, metadata: Metadata, value: Hashable) -> tuple[int, int]:
-        os.environ["PYTHONHASHSEED"] = str(metadata.hash_seed)
+        if isinstance(value, str):
+            # String hashes are not retained between programs
+            hashed_str = int(
+                hashlib.sha1(value.encode("utf-8")).hexdigest(), 16
+            )
+            return hashed_str, hashed_str % metadata.max_records
         hashed_field = hash(value)
         message_hash = (hashed_field & 0x7FFFFFFF) % metadata.max_records
         return hashed_field, message_hash
@@ -242,8 +255,20 @@ class Database:
         if not self.guild or not self._metadata_channel:
             self._not_connected()
 
-        matching: list[str] = []
         name = table.__disco_name__
+
+        try:
+            existing_metadata = self._get_table_metadata(name)
+        except DatabaseCorruptionError:
+            # The metadata does not exist
+            pass
+        else:
+            if set(existing_metadata.keys) != table.__disco_keys__:
+                raise DatabaseCorruptionError(
+                    f"schema for table {name} changed"
+                )
+
+        matching: list[str] = []
         for channel in self.guild.channels:
             for key in table.__disco_keys__:
                 if channel.name == f"{name}_{key}":
@@ -254,6 +279,7 @@ class Database:
                 raise DatabaseCorruptionError(
                     f"only some key channels exist: {', '.join(matching)}",
                 )
+
             # The table is already set up, no need to do anything more.
             return
 
@@ -284,7 +310,6 @@ class Database:
             current_records=0,
             max_records=initial_size,
             message_id=0,
-            hash_seed=secrets.randbelow(10**20),
         )
         self._database_metadata[name] = table_metadata
         message = await self._metadata_channel.send(
@@ -428,7 +453,7 @@ class Database:
 
     async def _find_records(
         self, table_name: str, kwargs: dict[str, Any]
-    ) -> list[dict]:
+    ) -> list[Table]:
         """
         Find a record based on the specified field values.
         """
