@@ -11,10 +11,8 @@ class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="insert", description="Insert new data into a table.")
-    @app_commands.describe(
-        table="The table which the data is to be inserted into.",
-        data="The data that is to be inserted."
+    @app_commands.command(
+        description="Insert new data into a table."
     )
     async def insert(self, interaction: discord.Interaction, table: str, data: str) -> None:
         """
