@@ -19,7 +19,7 @@ class Utility(commands.Cog):
     async def insert(
         self,
         interaction: discord.Interaction,
-        table: discord.channel,
+        table: discord.TextChannel,
         data: str
     ) -> None:
         await interaction.response.send_message(
