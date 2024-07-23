@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
-from threading import Thread
 from typing import (Any, Coroutine, Dict, Hashable, List, NoReturn, Type,
                     TypeVar)
 

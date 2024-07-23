@@ -43,7 +43,7 @@ async def test_creation(database: discobase.Database, bot: discord.Client):
 
 async def test_metadata_channel(database: discobase.Database):
     assert database._metadata_channel is not None
-    assert database._metadata_channel.name == f"{database.name}_db_metadata"
+    assert database._metadata_channel.name == "_dbmetadata"
     assert database.guild is not None
     found: bool = False
 
