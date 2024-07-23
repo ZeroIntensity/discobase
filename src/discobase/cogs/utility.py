@@ -41,6 +41,23 @@ class Utility(commands.Cog):
             f"I have edited data in table `{table}` / column `{column}` / row `{row}` to `{new_data}`."
         )
 
+    @app_commands.command(
+        description="Modifies a record with a new value."
+    )
+    @app_commands.describe(
+        table='Choose the database you want to perform an update on.',
+        field='Choose the key you want to update.',
+        new_value="Your new information."
+    )
+    async def update(
+        self,
+        inter: discord.Interaction,
+        table: discord.TextChannel,
+        field: str,
+        new_value: str
+     ) -> None:
+        pass
+
 
 async def setup(bot: commands.bot) -> None:
     await bot.add_cog(Utility(bot))
