@@ -8,3 +8,7 @@ class NotConnectedError(DiscobaseError):
 
 class DatabaseCorruptionError(DiscobaseError):
     """The database was corrupted somehow."""
+
+
+class DatabaseStorageError(DiscobaseError):
+    """Failed store something in the database."""

@@ -4,21 +4,24 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pkgutil import iter_modules
-from typing import (Any, Coroutine, Dict, Hashable, List, NoReturn, Type,
-                    TypeVar)
+from typing import Any, Coroutine, Dict, List, NoReturn, Type, TypeVar
 
 import discord
 from discord.ext import commands
+from discord.utils import snowflake_time, time_snowflake
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
-from .exceptions import DatabaseCorruptionError, NotConnectedError
+from .exceptions import (DatabaseCorruptionError, DatabaseStorageError,
+                         NotConnectedError)
 from .table import Table
 
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
+SupportsDiscoHash = str | int
 
 
 class _Record(BaseModel):
@@ -77,6 +80,7 @@ class Database:
 
         @self.bot.event
         async def on_ready() -> None:
+            0 / 0
             await self.init()
 
     @staticmethod
@@ -136,14 +140,7 @@ class Database:
             asyncio.create_task(self._create_table(table))
             for table in self._tables.values()
         ]
-        try:
-            await asyncio.gather(*tasks)
-        except Exception as e:
-            print(e)
-            for task in tasks:
-                task.cancel()
-
-            raise e
+        await asyncio.gather(*tasks)
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
 
@@ -225,16 +222,90 @@ class Database:
         await self._resize_hash(index_channel, initial_size)
         return index_channel.name, index_channel.id
 
-    def _hash(self, metadata: Metadata, value: Hashable) -> tuple[int, int]:
+    @staticmethod
+    def _to_index(metadata: Metadata, value: int) -> int:
+        """
+        Generate an index from a hash number based
+        on the metadata's `max_records`.
+
+        Args:
+            metadata: Metadata object for the channel.
+            value: Integer hash, positive or negative.
+
+        Returns:
+            Index in range of `metadata.max_records`.
+        """
+        return (value & 0x7FFFFFFF) % metadata.max_records
+
+    def _hash(
+        self,
+        value: SupportsDiscoHash,
+    ) -> int:
+        """
+        Hash the field into an integer.
+
+        Args:
+            value: Any discobase-hashable object.
+
+        Returns:
+            An integer, positive or negative, representing the unique hash.
+            This is always the same thing across programs.
+        """
         if isinstance(value, str):
-            # String hashes are not retained between programs
             hashed_str = int(
-                hashlib.sha1(value.encode("utf-8")).hexdigest(), 16
+                hashlib.sha1(value.encode("utf-8")).hexdigest(),
+                16,
             )
-            return hashed_str, hashed_str % metadata.max_records
-        hashed_field = hash(value)
-        message_hash = (hashed_field & 0x7FFFFFFF) % metadata.max_records
-        return hashed_field, message_hash
+            return hashed_str
+        elif isinstance(value, int):
+            return value
+        elif isinstance(value, list):
+            raise NotImplementedError
+        elif isinstance(value, tuple):
+            raise NotImplementedError
+        elif isinstance(value, dict):
+            raise NotImplementedError
+        else:
+            raise DatabaseStorageError(f"unhashable: {value!r}")
+
+    def _as_hashed(
+        self, metadata: Metadata, value: SupportsDiscoHash
+    ) -> tuple[int, int]:
+        hashed = self._hash(value)
+        return hashed, self._to_index(metadata, hashed)
+
+    async def _lookup_message(
+        self,
+        channel: discord.TextChannel,
+        metadata: Metadata,
+        index: int,
+    ) -> discord.Message:
+        """
+        Lookup a message by it's index in the table.
+        """
+        for timestamp, rng in metadata.time_table.items():
+            start: int = rng[0]
+            end: int = rng[1]
+            if index not in range(
+                start, end
+            ):  # Pydantic doesn't support ranges
+                continue
+
+            current_index: int = 0
+            async for msg in channel.history(
+                limit=end - start, before=snowflake_time(timestamp)
+            ):
+                if current_index == (index - start):
+                    return msg
+                current_index += 1
+
+            raise DatabaseCorruptionError(
+                f"range for {timestamp} in table {metadata.name} does not contain index {index}"  # noqa
+            )
+
+        raise DatabaseCorruptionError(
+            f"message index out of range for table {metadata.name}: {index}"
+        )
 
     async def _create_table(
         self,
@@ -315,6 +386,7 @@ class Database:
             index_channels=index_channels,
             current_records=0,
             max_records=initial_size,
+            time_table={time_snowflake(datetime.now()): (0, initial_size)},
             message_id=0,
         )
         self._database_metadata[name] = table_metadata
@@ -360,6 +432,113 @@ class Database:
         await asyncio.gather(*coros)
         del self._database_metadata[table_name]
 
+    async def _resize_channel(
+        self,
+        metadata: Metadata,
+        channel: discord.TextChannel,
+    ) -> None:
+        await self._resize_hash(channel, metadata.max_records)
+        old_size: int = metadata.max_records
+        metadata.max_records *= 2  # _resize_hash() will double the records
+        metadata.time_table[time_snowflake(datetime.now())] = (
+            old_size,
+            metadata.max_records,
+        )
+
+        # Now, we have to move everything into the correct position.
+        #
+        # Note that this shouldn't put everything into memory, as
+        # each previous iteration will be freed -- this is good
+        # for scalability.
+        async for msg in channel.history(
+            limit=old_size,
+            oldest_first=True,
+        ):
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
+
+            new_index: int = self._to_index(metadata, record.key)
+            target = await self._lookup_message(
+                channel,
+                metadata,
+                new_index,
+            )
+
+    async def _resize_table(self, metadata: Metadata) -> None:
+        await asyncio.gather(
+            *[
+                self._resize_channel(metadata, self._find_channel(cid))
+                for cid in metadata.index_channels.values()
+            ]
+        )
+
+    async def _write_index_record(
+        self,
+        channel: discord.TextChannel,
+        metadata: Metadata,
+        index: int,
+        hashed: int,
+        record_id: int,
+    ) -> None:
+        """
+        Write an index record to the specified channel, using
+        a known hash and index.
+
+        Args:
+            channel: Target index channel to store the index record at.
+            metadata: Metadata for the entire table.
+            index: Index to store the record at in the table.
+            hashed: Integer hash of the original value e.g. what generated the index.
+            record_id: Message ID of the record in the main table.
+        """
+        entry_message: discord.Message = await self._lookup_message(
+            channel,
+            metadata,
+            index,
+        )
+        serialized_content = _IndexableRecord.from_message(
+            entry_message.content
+        )
+
+        if not serialized_content:
+            # This is a null entry, we can just update in place
+            message_content = _IndexableRecord(
+                key=hashed,
+                record_ids=[
+                    record_id,
+                ],
+            )
+            await self._edit_message(
+                channel,
+                entry_message.id,
+                content=message_content.model_dump_json(),
+            )
+        elif serialized_content.key == hashed:
+            # This already exists, let's append to the data
+            serialized_content.record_ids.append(record_id)
+            await entry_message.edit(
+                content=serialized_content.model_dump_json()
+            )
+        else:
+            raise NotImplementedError
+            # Hash collision!
+            index_message: discord.Message = self._find_free_message(
+                ...,
+                index,
+            )
+            message_content = _IndexableRecord(
+                key=hashed_,
+                record_ids=[
+                    record_id,
+                ],
+            )
+            await self._edit_message(
+                channel,
+                index_message.id,
+                message_content.model_dump_json(),
+            )
+
     async def _add_record(self, record: Table) -> discord.Message:
         """
         Writes a record to an existing table.
@@ -377,8 +556,8 @@ class Database:
         table_metadata = self._get_table_metadata(record.__disco_name__)
         table_metadata.current_records += 1
         if table_metadata.current_records > table_metadata.max_records:
-            # TODO: Resize the table here
-            raise IndexError("The table is full")
+            # The table is full! We need to resize it.
+            await self._resize_table(table_metadata)
 
         await self._edit_message(
             self._metadata_channel,
@@ -404,64 +583,35 @@ class Database:
                     continue
 
                 index_channel: discord.TextChannel = self._find_channel(cid)
-                # Load the messages into memory.
-                # TODO: Either implement some caching here, or add a limit
-                messages = [
-                    message
-                    async for message in index_channel.history(
-                        limit=table_metadata.max_records
-                    )
-                ]
-
-                hashed_field, target_index = self._hash(table_metadata, value)
-                content: str = messages[target_index].content
-                serialized_content = _IndexableRecord.from_message(content)
-
-                if not serialized_content:
-                    # This is a null entry, we can just update in place
-                    message_content = _IndexableRecord(
-                        key=hashed_field,
-                        record_ids=[
-                            message.id,
-                        ],
-                    )
-                    await self._edit_message(
-                        index_channel,
-                        messages[target_index].id,
-                        content=message_content.model_dump_json(),
-                    )
-                elif serialized_content.key == hashed_field:
-                    # This already exists, let's append to the data
-                    serialized_content.record_ids.append(message.id)
-                    await messages[target_index].edit(
-                        content=serialized_content.model_dump_json()
-                    )
-                else:
-                    # Hash collision!
-                    index_message: discord.Message = self._find_free_message(
-                        messages,
-                        target_index,
-                    )
-                    message_content = _IndexableRecord(
-                        key=hashed_field,
-                        record_ids=[
-                            message.id,
-                        ],
-                    )
-                    await self._edit_message(
-                        index_channel,
-                        index_message.id,
-                        message_content.model_dump_json(),
-                    )
-                    break
+                hashed_field, target_index = self._as_hashed(
+                    table_metadata, value
+                )
+                await self._write_index_record(
+                    index_channel,
+                    table_metadata,
+                    target_index,
+                    hashed_field,
+                    message.id,
+                )
 
         return await message.edit(content=record_data.model_dump_json())
 
     async def _find_records(
-        self, table_name: str, kwargs: dict[str, Any]
+        self,
+        table_name: str,
+        query: dict[str, Any],
     ) -> list[Table]:
         """
         Find a record based on the specified field values.
+
+        Args:
+            table_name: Name of the table, may be unprocessed.
+            query: Dictionary containing field-value pairs.
+
+        Returns:
+            A list of `Table` objects (or really, a list of objects
+            that inherit from `Table`), with the appropriate values
+            specified by `query`.
         """
 
         if not self.guild:
@@ -470,7 +620,7 @@ class Database:
         table_metadata = self._get_table_metadata(table_name.lower())
         sets_list: list[set[int]] = []
 
-        for field, value in kwargs.items():
+        for field, value in query.items():
             if field not in table_metadata.keys:
                 raise DatabaseCorruptionError(
                     f"table '{table_metadata.name}' has no '{field}' attribute"
@@ -479,16 +629,19 @@ class Database:
                 if name.lower().split("_")[1] != field.lower():
                     continue
 
+                hashed_field, target_index = self._as_hashed(
+                    table_metadata,
+                    value,
+                )
                 index_channel: discord.TextChannel = self._find_channel(cid)
-                index_messages = [
-                    message
-                    async for message in index_channel.history(
-                        limit=table_metadata.max_records
-                    )
-                ]
-                hashed_field, target_index = self._hash(table_metadata, value)
-                content: str = index_messages[target_index].content
-                serialized_content = _IndexableRecord.from_message(content)
+                entry_message: discord.Message = await self._lookup_message(
+                    index_channel,
+                    table_metadata,
+                    target_index,
+                )
+                serialized_content = _IndexableRecord.from_message(
+                    entry_message.content
+                )
 
                 if not serialized_content:
                     # Nothing was found
