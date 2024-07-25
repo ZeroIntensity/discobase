@@ -948,6 +948,18 @@ class Database:
 
                     sets_list.append(set(rec.record_ids))
 
+        if not query:
+            logger.info("Empty query, getting all entries.")
+            for name, cid in table_metadata.index_channels.items():
+                index_channel: discord.TextChannel = self._find_channel(cid)
+
+                async for msg in index_channel.history(limit=None):
+                    rec = _IndexableRecord.from_message(msg.content)
+                    if not rec:
+                        continue
+
+                    sets_list.append(set(rec.record_ids))
+
         main_table = await self.guild.fetch_channel(
             table_metadata.table_channel
         )

@@ -1,3 +1,8 @@
+---
+hide:
+    - navigation
+---
+
 # Discobase
 
 ## What is Discobase?
