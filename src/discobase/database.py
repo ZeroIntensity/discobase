@@ -191,6 +191,39 @@ class Database:
             logger.info("Found an existing guild.")
             self.guild = found_guild
 
+        await self.build_tables()
+        # At this point, the database is marked as "ready" to the user.
+        self._setup_event.set()
+
+    async def build_tables(self) -> None:
+        """
+        Generate all internal metadata and construct tables.
+
+        Calling this manually is useful if e.g. you want
+        to load tables *after* calling `login` (or `login_task`, or
+        `conn`, same difference.)
+
+        This method is safe to call multiple times.
+
+        Example:
+            ```py
+            import asyncio
+            import discobase
+
+            async def main():
+                db = discobase.Database("My database")
+                db.login_task("My bot token")
+
+                @db.table
+                class MyLateTable(discobase.Table):
+                    something: str
+
+                # Load MyLateTable into database
+                await db.build_tables()
+
+            asyncio.run(main())
+            ```
+        """
         self._metadata_channel = await self._metadata_init()
         async for message in self._metadata_channel.history():
             # We need to populate the metadata in-memory, if it exists
@@ -203,9 +236,6 @@ class Database:
         ]
         logger.debug(f"Creating tables with gather(): {tasks}")
         await asyncio.gather(*tasks)
-
-        # At this point, the database is marked as "ready" to the user.
-        self._setup_event.set()
 
     async def wait_ready(self) -> None:
         """
