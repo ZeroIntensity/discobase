@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
 from .exceptions import (DatabaseCorruptionError, DatabaseStorageError,
-                         NotConnectedError)
+                         DatabaseTableError, NotConnectedError)
 from .table import Table
 
 __all__ = ("Database",)
@@ -1146,9 +1146,13 @@ class Database:
             to allow use as a decorator.
         """
         if not issubclass(clas, Table):
-            raise TypeError(
-                f"{clas} is not a subclass of Table, did you forget it?",
+            raise DatabaseTableError(
+                f"{clas} is not a subclass of discobase.Table, did you forget it?",  # noqa
             )
+
+        clas.__disco_name__ = clas.__name__.lower()
+        if clas.__disco_name__ in self.tables:
+            raise DatabaseTableError(f"table {clas.__name__} already exists")
 
         # Some implementation information.
         # __disco_database__ stores a reference to the database object, to
@@ -1172,6 +1176,5 @@ class Database:
         for field in clas.model_fields:
             clas.__disco_keys__.add(field)
 
-        clas.__disco_name__ = clas.__name__.lower()
         self.tables[clas.__disco_name__] = clas
         return clas

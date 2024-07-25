@@ -8,7 +8,7 @@ from typing_extensions import Self
 if TYPE_CHECKING:
     from .database import Database
 
-from .exceptions import DatabaseTableError
+from .exceptions import DatabaseTableError, NotConnectedError
 
 __all__ = ("Table",)
 
@@ -33,7 +33,7 @@ class Table(BaseModel):
             )
 
         if not cls.__disco_database__.open:
-            raise DatabaseTableError(
+            raise NotConnectedError(
                 "database is not connected! did you forget to open it?"
             )
 

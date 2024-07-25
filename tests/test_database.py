@@ -4,6 +4,7 @@ import discord
 import pytest
 
 import discobase
+from discobase.exceptions import DatabaseTableError
 
 
 @pytest.fixture
@@ -53,3 +54,37 @@ async def test_metadata_channel(database: discobase.Database):
             break
 
     assert found is True
+
+
+async def test_schemas(database: discobase.Database):
+    class User(discobase.Table):
+        name: str
+        password: str
+
+    with pytest.raises(DatabaseTableError):
+        # No database attached
+        await User(name="Peter", password="foobar").save()
+
+    with pytest.raises(DatabaseTableError):
+        # Missing `Table` subclass
+        @database.table  # type: ignore
+        class Foo:
+            name: str
+            password: str
+
+    User = database.table(User)
+    with pytest.raises(DatabaseTableError):
+        # Not ready
+        await User(name="Peter", password="foobar").save()
+
+    await database.build_tables()
+    user = User(name="Peter", password="foobar")
+    await user.save()
+    assert (await User.find(name="Peter"))[0] == user
+
+    with pytest.raises(DatabaseTableError):
+        # Duplicate table name
+        @database.table
+        class User(discobase.Table):
+            name: str
+            password: str
