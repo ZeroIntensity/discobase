@@ -1,9 +1,7 @@
-from enum import auto, StrEnum
+from datetime import datetime as dt
+from enum import StrEnum, auto
 
 import discord
-from discord import app_commands
-from discord.ext import commands
-from datetime import datetime as dt
 
 """
 How to Use:
@@ -112,13 +110,16 @@ class EmbedFromContent:
 
         match self.style:
             case "column":
-                self.column_display()
+                self._column_display()
             case "table":
-                self.table_display()
+                self._table_display()
             case _:
                 raise ValueError("Invalid style input.")
 
-    def column_display(self) -> list[discord.Embed]:
+    def _column_display(self) -> list[discord.Embed]:
+        """
+        Creates list of discord embeds for the column content, 15 rows per embed.
+        """
         entries_per_page = 15
         embeds: list[discord.Embed] = []
 
@@ -148,7 +149,10 @@ class EmbedFromContent:
 
         return embeds
 
-    def table_display(self) -> list[discord.Embed]:
+    def _table_display(self) -> list[discord.Embed]:
+        """
+        Creates a list of discord embeds that display the data in a table, 10 entries per page.
+        """
         entries_per_page = 10
         embeds: list[discord.Embed] = []
 
