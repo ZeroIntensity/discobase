@@ -12,6 +12,7 @@ from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
 import discord
 from discord.ext import commands
 from discord.utils import snowflake_time, time_snowflake
+from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
@@ -54,6 +55,7 @@ class _IndexableRecord(BaseModel):
             An `_IndexableRecord` instance, or `None`, if the message
             was `null`.
         """
+        logger.debug(f"Parsing {message} into an _IndexableRecord")
         try:
             return (
                 cls.model_validate_json(message) if message != "null" else None
@@ -111,6 +113,7 @@ class Database:
         # CI to run indefinitely.
 
         @self.bot.event
+        @logger.catch(reraise=True)
         async def on_ready() -> None:
             try:
                 await self.init()
@@ -123,6 +126,7 @@ class Database:
                 self._on_ready_exc = e
                 raise  # This is swallowed!
 
+    @logger.catch(reraise=True)
     def _not_connected(self) -> NoReturn:
         """
         Complain about the database not being connected.
@@ -150,8 +154,10 @@ class Database:
         for channel in self.guild.text_channels:
             if channel.name == metadata_channel_name:
                 found_channel = channel
+                logger.info("Found metadata channel!")
                 break
 
+        logger.info("No metadata channel found, creating one.")
         return found_channel or await self.guild.create_text_channel(
             name=metadata_channel_name
         )
@@ -163,13 +169,16 @@ class Database:
         Generally, you don't want to call this manually, but
         this is considered to be a public interface.
         """
+        logger.info("Initializing the bot.")
         # Load external commands
         for module in iter_modules(path=["cogs"], prefix="cogs."):
+            logger.debug(f"Loading module with cog: {module}")
             await self.bot.load_extension(module.name)
 
         await self.bot.tree.sync()
-
+        logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
+        logger.info("Bot is ready!")
         found_guild: discord.Guild | None = None
         for guild in self.bot.guilds:
             if guild.name == self.name:
@@ -177,8 +186,10 @@ class Database:
                 break
 
         if not found_guild:
+            logger.info("No guild found, making one.")
             self.guild = await self.bot.create_guild(name=self.name)
         else:
+            logger.info("Found an existing guild.")
             self.guild = found_guild
 
         self._metadata_channel = await self._metadata_init()
@@ -191,6 +202,7 @@ class Database:
             asyncio.create_task(self._create_table(table))
             for table in self.tables.values()
         ]
+        logger.debug(f"Creating tables with gather(): {tasks}")
         await asyncio.gather(*tasks)
 
         # At this point, the database is marked as "ready" to the user.
@@ -200,9 +212,12 @@ class Database:
         """
         Wait until the database is ready.
         """
+        logger.info("Waiting until the database is ready.")
         await self._setup_event.wait()
+        logger.info("Done waiting!")
         # See #49, we need to propagate errors in on_ready here.
         if self._on_ready_exc:
+            logger.error("on_ready() failed, propagating now.")
             raise self._on_ready_exc
 
     def _find_channel(self, cid: int) -> discord.TextChannel:
@@ -218,6 +233,7 @@ class Database:
                 f"expected {index_channel!r} to be a TextChannel"
             )
 
+        logger.debug(f"Found channel ID {cid}: {index_channel!r}")
         return index_channel
 
     async def _find_collision_message(
@@ -228,22 +244,42 @@ class Database:
         *,
         search_func: Callable[[str], bool] = lambda s: s == "null",
     ) -> discord.Message:
-        offset: int = 1
+        """
+        Search for a message via a worst-case O(n) search in the event
+        of a hash collision.
+
+        Args:
+            channel: Index channel to search.
+            metadata: Metadata for the whole table.
+            index: The index to start at.
+            search_func: Function to check if the message content is good.
+        """
+        logger.debug(
+            f"Looking up hash collision entry using search function: {search_func}"  # noqa
+        )
+        offset: int = index + 1
         while True:
+            logger.debug(f"Hash collision search at index: {offset}")
             if offset == index:
                 raise DatabaseCorruptionError(
                     f"index channel {channel!r} has no free messages, table was likely not resized."  # noqa
                 )
 
             if (offset + index) >= metadata.max_records:
-                # Need to wrap around the table
-                offset = 0
+                # We need to wrap around the table.
+                # Since we increment at the end, this is -1 to make 0.
+                offset = -1
 
             message = await self._lookup_message(
                 channel, metadata, offset + index
             )
             if search_func(message.content):
+                logger.debug(
+                    f"Done searching for collision message: {message.content}"
+                )
                 return message
+
+            offset += 1
 
     async def _edit_message(
         self,
@@ -256,6 +292,7 @@ class Database:
         """
         # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
+        logger.debug(f"Editing message (ID {mid}) to {content}")
         await editable_message.edit(content=content)
 
     async def _gen_key_channel(
@@ -286,6 +323,7 @@ class Database:
         index_channel = await self.guild.create_text_channel(
             f"{table}_{key_name}"
         )
+        logger.debug(f"Generated key channel: {index_channel}")
         await self._resize_hash(index_channel, initial_size)
         return index_channel.name, index_channel.id
 
@@ -302,7 +340,11 @@ class Database:
         Returns:
             Index in range of `metadata.max_records`.
         """
-        return (value & 0x7FFFFFFF) % metadata.max_records
+        index = (value & 0x7FFFFFFF) % metadata.max_records
+        logger.debug(
+            f"Hashed value {value} turned into index: {index} ({metadata.max_records=})"  # noqa
+        )
+        return index
 
     def _hash(
         self,
@@ -361,6 +403,7 @@ class Database:
         Raises:
             DatabaseCorruptionError: Could not find the index.
         """
+        logger.debug(f"Looking up message: {index}")
         for timestamp, rng in metadata.time_table.items():
             start: int = rng[0]
             end: int = rng[1]
@@ -369,11 +412,13 @@ class Database:
             ):  # Pydantic doesn't support ranges
                 continue
 
+            logger.debug(f"In range: {start} - {end}")
             current_index: int = 0
             async for msg in channel.history(
                 limit=end - start, before=snowflake_time(timestamp)
             ):
                 if current_index == (index - start):
+                    logger.debug(f"{msg} found at index {current_index}")
                     return msg
                 current_index += 1
 
@@ -415,10 +460,12 @@ class Database:
         try:
             existing_metadata = self._get_table_metadata(name)
         except DatabaseCorruptionError:
-            # The metadata does not exist
-            pass
+            logger.info("The metadata does not exist.")
         else:
             if set(existing_metadata.keys) != table.__disco_keys__:
+                logger.error(
+                    f"stored keys: {', '.join(existing_metadata.keys)}, table keys: {', '.join(table.__disco_keys__)}"  # noqa
+                )
                 raise DatabaseCorruptionError(
                     f"schema for table {name} changed"
                 )
@@ -436,10 +483,14 @@ class Database:
                 )
 
             # The table is already set up, no need to do anything more.
+            logger.info("Table is already set up: {table.__disco_name__}")
             return
+
+        logger.info("Building table: {table.__disco_name__}")
 
         # The primary table holds the actual records
         primary_table = await self.guild.create_text_channel(name)
+        logger.debug(f"Generated primary table: {primary_table!r}")
         index_channels: dict[str, int] = {}
 
         # This is ugly, but this is fast: we generate
@@ -468,6 +519,7 @@ class Database:
             message_id=0,
         )
         self._database_metadata[name] = table_metadata
+        logger.debug(f"Generated table metadata: {table_metadata!r}")
         message = await self._metadata_channel.send(
             table_metadata.model_dump_json()
         )
@@ -485,6 +537,7 @@ class Database:
         metadata channel.
         """
 
+        # TODO: Refactor this function
         if not self.guild or not self._metadata_channel:
             self._not_connected()
 
@@ -517,11 +570,11 @@ class Database:
         metadata: Metadata,
         channel: discord.TextChannel,
     ) -> None:
-        await self._resize_hash(channel, metadata.max_records)
-        old_size: int = metadata.max_records
-        # _resize_hash() will double the records, so
-        # we need to account for it here.
-        metadata.max_records *= 2
+        logger.debug(
+            f"Resizing channel: {channel!r} for table {metadata.name}",
+        )
+        old_size: int = metadata.max_records // 2
+        await self._resize_hash(channel, old_size)
         metadata.time_table[time_snowflake(datetime.now())] = (
             old_size,
             metadata.max_records,
@@ -549,11 +602,19 @@ class Database:
             next_record = _IndexableRecord.from_message(target.content)
             if next_record:
                 next_record._next_value = record
-                await self._edit_message(
-                    channel,
-                    target.id,
-                    next_record.model_dump_json(),
-                )
+                if next_record._next_value:
+                    logger.info("Hash collision in resize!")
+                    target = await self._find_collision_message(
+                        channel,
+                        metadata,
+                        new_index,
+                    )
+                else:
+                    logger.debug(
+                        f"{next_record} marked as the next value location ({target.id=})"  # noqa
+                    )
+
+                await target.edit(content=next_record.model_dump_json())
             else:
                 # In case of a hash collision, we want to mark
                 # this as having a `_next_value`, so it doesn't get
@@ -562,11 +623,10 @@ class Database:
                 # We copy this to prevent a recursive model dump.
                 copy = record.model_copy()
                 copy._next_value = record
-                await self._edit_message(
-                    channel,
-                    target.id,
-                    copy.model_dump_json(),
-                )
+                await target.edit(content=copy.model_dump_json())
+
+            if not record._next_value:
+                await msg.edit(content="null")
 
         # Finally, all the _next_value attributes have been set, we can
         # go through and update each record.
@@ -587,6 +647,9 @@ class Database:
 
             if not record._next_value:
                 continue
+                raise DatabaseCorruptionError(
+                    "all existing records after resize should have _next_value",  # noqa
+                )
 
             new_index: int = self._to_index(metadata, record.key)
             target = await self._lookup_message(
@@ -594,19 +657,35 @@ class Database:
                 metadata,
                 new_index,
             )
-
-            await self._edit_message(
-                channel,
-                target.id,
-                record._next_value.model_dump_json(),
+            logger.debug(
+                f"Replacing {target.content} with {record._next_value!r}"
             )
 
+            await target.edit(content=record._next_value.model_dump_json())
+
     async def _resize_table(self, metadata: Metadata) -> None:
+        if not self._metadata_channel:
+            self._not_connected()
+
+        metadata.max_records *= 2
+        logger.info(
+            f"Table {metadata.name} is full! Resizing it to {metadata.max_records}"  # noqa
+        )
         await asyncio.gather(
             *[
                 self._resize_channel(metadata, self._find_channel(cid))
                 for cid in metadata.index_channels.values()
             ]
+        )
+
+        # Dump the new metadata
+        await self._edit_message(
+            self._metadata_channel,
+            metadata.message_id,
+            metadata.model_dump_json(),
+        )
+        logger.info(
+            f"Table {metadata.name} is now of size {metadata.max_records}"
         )
 
     async def _write_index_record(
@@ -638,26 +717,22 @@ class Database:
         )
 
         if not serialized_content:
-            # This is a null entry, we can just update in place
+            logger.info("This is a null entry, we can just update in place.")
             message_content = _IndexableRecord(
                 key=hashed,
                 record_ids=[
                     record_id,
                 ],
             )
-            await self._edit_message(
-                channel,
-                entry_message.id,
-                content=message_content.model_dump_json(),
-            )
+            await entry_message.edit(content=message_content.model_dump_json())
         elif serialized_content.key == hashed:
-            # This already exists, let's append to the data
+            logger.info("This already exists, let's append to the data.")
             serialized_content.record_ids.append(record_id)
             await entry_message.edit(
                 content=serialized_content.model_dump_json()
             )
         else:
-            # Hash collision!
+            logger.info("Hash collision!")
             index_message = await self._find_collision_message(
                 channel,
                 metadata,
@@ -669,11 +744,7 @@ class Database:
                     record_id,
                 ],
             )
-            await self._edit_message(
-                channel,
-                index_message.id,
-                collision_entry.model_dump_json(),
-            )
+            await index_message.edit(content=collision_entry.model_dump_json())
 
     async def _add_record(self, record: Table) -> discord.Message:
         """
@@ -692,7 +763,7 @@ class Database:
         table_metadata = self._get_table_metadata(record.__disco_name__)
         table_metadata.current_records += 1
         if table_metadata.current_records > table_metadata.max_records:
-            # The table is full! We need to resize it.
+            logger.info("The table is full! We need to resize it.")
             await self._resize_table(table_metadata)
 
         await self._edit_message(
@@ -742,6 +813,7 @@ class Database:
 
         Args:
             table_name: Name of the table, may be unprocessed.
+                    next_record._next_value = record
             query: Dictionary containing field-value pairs.
 
         Returns:
