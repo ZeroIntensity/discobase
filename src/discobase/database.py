@@ -513,6 +513,7 @@ class Database:
 
             # The table is already set up, no need to do anything more.
             logger.info("Table is already set up: {table.__disco_name__}")
+            table.__disco_ready__ = True
             return
 
         logger.info("Building table: {table.__disco_name__}")
@@ -553,6 +554,7 @@ class Database:
             table_metadata.model_dump_json()
         )
 
+        table.__disco_ready__ = True
         # Since Discord generates the message ID, we have to do these
         # message editing shenanigans.
         table_metadata.message_id = message.id
