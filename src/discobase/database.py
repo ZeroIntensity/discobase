@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import traceback
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from datetime import datetime
