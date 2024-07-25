@@ -6,7 +6,8 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pkgutil import iter_modules
-from typing import Any, Coroutine, Dict, List, NoReturn, Type, TypeVar
+from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
+                    TypeVar)
 
 import discord
 from discord.ext import commands
@@ -32,10 +33,27 @@ class _Record(BaseModel):
 
 class _IndexableRecord(BaseModel):
     key: int
+    """Hashed value of the key."""
     record_ids: List[int]
+    """Message IDs of the records that correspond to this key."""
+    _next_value: _IndexableRecord | None = None
+    """
+    Temporary placeholder value for the next entry.
+    Only for use in resizing.
+    """
 
     @classmethod
     def from_message(cls, message: str) -> _IndexableRecord | None:
+        """
+        Generate an `_IndexableRecord` instance from message content.
+
+        Args:
+            message: Message content to parse as JSON.
+
+        Returns:
+            An `_IndexableRecord` instance, or `None`, if the message
+            was `null`.
+        """
         try:
             return (
                 cls.model_validate_json(message) if message != "null" else None
@@ -60,12 +78,13 @@ class Database:
         self.name = name
         """Name of the Discord-database server."""
         self.bot = commands.Bot(
-            intents=discord.Intents.all(), command_prefix="!"
+            intents=discord.Intents.all(),
+            command_prefix="!",
         )
         """discord.py `Bot` instance."""
         self.guild: discord.Guild | None = None
         """discord.py `Guild` used as the database server."""
-        self._tables: dict[str, type[Table]] = {}
+        self.tables: dict[str, type[Table]] = {}
         """Dictionary of `Table` objects attached to this database."""
         self.open: bool = False
         """Whether the database is connected."""
@@ -84,7 +103,7 @@ class Database:
         # goes against some connect-and-disconnect behavior
         # that we want to allow in discobase.
         #
-        # We need to store the exception, and then raise in _not_connected()
+        # We need to store the exception, and then raise in wait_ready()
         # in order to properly handle it, otherwise the discord.py
         # logger just swallows it and pretends nothing happened.
         #
@@ -109,17 +128,8 @@ class Database:
         Complain about the database not being connected.
 
         Generally speaking, this is called when `guild` or something
-        other is `None`. However, this has a second use: raising
-        an exception caught in `on_ready`. discord.py swallows that
-        error and writes it to it's logger, which we don't want.
-
-        Errors raised in `on_ready` are not propagated on
-        bot startup, they are saved and raised here instead, so
-        technically speaking, this method can raise more than just
-        a `NotConnectedError`.
+        other is `None`.
         """
-        if self._on_ready_exc:
-            raise self._on_ready_exc
 
         raise NotConnectedError(
             "not connected to the database, did you forget to login?"
@@ -129,6 +139,9 @@ class Database:
         """
         Find the metadata channel.
         If it doesn't exist, this method creates one.
+
+        Returns:
+            The metadata channel, either created or found.
         """
         metadata_channel_name = "_dbmetadata"
         found_channel: discord.TextChannel | None = None
@@ -146,7 +159,9 @@ class Database:
     async def init(self) -> None:
         """
         Initializes the database server.
-        Generally, you don't want to call this manually.
+
+        Generally, you don't want to call this manually, but
+        this is considered to be a public interface.
         """
         # Load external commands
         for module in iter_modules(path=["cogs"], prefix="cogs."):
@@ -174,15 +189,21 @@ class Database:
 
         tasks = [
             asyncio.create_task(self._create_table(table))
-            for table in self._tables.values()
+            for table in self.tables.values()
         ]
         await asyncio.gather(*tasks)
+
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
 
     async def wait_ready(self) -> None:
-        """Wait until the database is ready."""
+        """
+        Wait until the database is ready.
+        """
         await self._setup_event.wait()
+        # See #49, we need to propagate errors in on_ready here.
+        if self._on_ready_exc:
+            raise self._on_ready_exc
 
     def _find_channel(self, cid: int) -> discord.TextChannel:
         if not self.guild:
@@ -199,23 +220,30 @@ class Database:
 
         return index_channel
 
-    def _find_free_message(
+    async def _find_collision_message(
         self,
-        messages: list[discord.Message],
-        message_hash: int,
+        channel: discord.TextChannel,
+        metadata: Metadata,
+        index: int,
+        *,
+        search_func: Callable[[str], bool] = lambda s: s == "null",
     ) -> discord.Message:
-        offset = 1
-        index_message = messages[message_hash + offset]
-        while index_message.content != "null":
-            offset += 1
-            if (message_hash + offset) >= len(messages):
-                offset = 0 - message_hash
-            elif message_hash + offset == message_hash:
-                raise IndexError("The database is full")
+        offset: int = 1
+        while True:
+            if offset == index:
+                raise DatabaseCorruptionError(
+                    f"index channel {channel!r} has no free messages, table was likely not resized."  # noqa
+                )
 
-            index_message = messages[message_hash + offset]
+            if (offset + index) >= metadata.max_records:
+                # Need to wrap around the table
+                offset = 0
 
-        return index_message
+            message = await self._lookup_message(
+                channel, metadata, offset + index
+            )
+            if search_func(message.content):
+                return message
 
     async def _edit_message(
         self,
@@ -223,6 +251,9 @@ class Database:
         mid: int,
         content: str,
     ) -> None:
+        """
+        Edit a message given the channel, message ID, and content.
+        """
         # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
         await editable_message.edit(content=content)
@@ -318,6 +349,17 @@ class Database:
     ) -> discord.Message:
         """
         Lookup a message by it's index in the table.
+
+        Args:
+            channel: Index channel to search.
+            metadata: Metadata for the entire table.
+            index: Index to get.
+
+        Returns:
+            The found message.
+
+        Raises:
+            DatabaseCorruptionError: Could not find the index.
         """
         for timestamp, rng in metadata.time_table.items():
             start: int = rng[0]
@@ -438,13 +480,15 @@ class Database:
     async def _delete_table(self, table_name: str) -> None:
         """
         Deletes the table and all associated tables.
-        This also removes the table metadata
+
+        This also removes the table metadata from the
+        metadata channel.
         """
 
         if not self.guild or not self._metadata_channel:
             self._not_connected()
 
-        del self._tables[table_name]
+        del self.tables[table_name]
         coros: list[Coroutine] = []
         # This makes sure to only delete channels that relate to the table
         # that is represented by table_name and not channels that contain
@@ -475,7 +519,9 @@ class Database:
     ) -> None:
         await self._resize_hash(channel, metadata.max_records)
         old_size: int = metadata.max_records
-        metadata.max_records *= 2  # _resize_hash() will double the records
+        # _resize_hash() will double the records, so
+        # we need to account for it here.
+        metadata.max_records *= 2
         metadata.time_table[time_snowflake(datetime.now())] = (
             old_size,
             metadata.max_records,
@@ -499,6 +545,60 @@ class Database:
                 channel,
                 metadata,
                 new_index,
+            )
+            next_record = _IndexableRecord.from_message(target.content)
+            if next_record:
+                next_record._next_value = record
+                await self._edit_message(
+                    channel,
+                    target.id,
+                    next_record.model_dump_json(),
+                )
+            else:
+                # In case of a hash collision, we want to mark
+                # this as having a `_next_value`, so it doesn't get
+                # overwritten.
+                #
+                # We copy this to prevent a recursive model dump.
+                copy = record.model_copy()
+                copy._next_value = record
+                await self._edit_message(
+                    channel,
+                    target.id,
+                    copy.model_dump_json(),
+                )
+
+        # Finally, all the _next_value attributes have been set, we can
+        # go through and update each record.
+        #
+        # The overall algorithm is O(2n), but it's much
+        # more scalable that trying to put the entire table into memory
+        # so we can resize it.
+        #
+        # This algorithm is pretty much infinitely scalable, if you factor
+        # out Discord's ratelimit.
+        async for msg in channel.history(
+            limit=old_size,
+            oldest_first=True,
+        ):
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
+
+            if not record._next_value:
+                continue
+
+            new_index: int = self._to_index(metadata, record.key)
+            target = await self._lookup_message(
+                channel,
+                metadata,
+                new_index,
+            )
+
+            await self._edit_message(
+                channel,
+                target.id,
+                record._next_value.model_dump_json(),
             )
 
     async def _resize_table(self, metadata: Metadata) -> None:
@@ -525,7 +625,7 @@ class Database:
             channel: Target index channel to store the index record at.
             metadata: Metadata for the entire table.
             index: Index to store the record at in the table.
-            hashed: Integer hash of the original value e.g. what generated the index.
+            hashed: Integer hash of the original value e.g. from `_hash`.
             record_id: Message ID of the record in the main table.
         """
         entry_message: discord.Message = await self._lookup_message(
@@ -557,14 +657,14 @@ class Database:
                 content=serialized_content.model_dump_json()
             )
         else:
-            raise NotImplementedError
             # Hash collision!
-            index_message: discord.Message = self._find_free_message(
-                ...,
+            index_message = await self._find_collision_message(
+                channel,
+                metadata,
                 index,
             )
-            message_content = _IndexableRecord(
-                key=hashed_,
+            collision_entry = _IndexableRecord(
+                key=hashed,
                 record_ids=[
                     record_id,
                 ],
@@ -572,7 +672,7 @@ class Database:
             await self._edit_message(
                 channel,
                 index_message.id,
-                message_content.model_dump_json(),
+                collision_entry.model_dump_json(),
             )
 
     async def _add_record(self, record: Table) -> discord.Message:
@@ -658,11 +758,13 @@ class Database:
 
         for field, value in query.items():
             if field not in table_metadata.keys:
-                raise DatabaseCorruptionError(
-                    f"table '{table_metadata.name}' has no '{field}' attribute"
+                raise ValueError(
+                    f"table {table_metadata.name} has no field {field}"
                 )
+
             for name, cid in table_metadata.index_channels.items():
-                if name.lower().split("_")[1] != field.lower():
+                # TODO: Refactor this loop
+                if name.lower().split("_", maxsplit=1)[1] != field.lower():
                     continue
 
                 hashed_field, target_index = self._as_hashed(
@@ -686,10 +788,33 @@ class Database:
                 if serialized_content.key == hashed_field:
                     sets_list.append(set(serialized_content.record_ids))
                 else:
-                    raise DatabaseCorruptionError(
-                        "not implemented: hash collision"
+                    # Hash collision!
+                    def find_hash(message: str | None) -> bool:
+                        if not message:
+                            return False
+
+                        index_record = _IndexableRecord.from_message(message)
+                        if not index_record:
+                            return False
+
+                        return index_record.key == hashed_field
+
+                    entry = await self._find_collision_message(
+                        index_channel,
+                        table_metadata,
+                        target_index,
+                        search_func=find_hash,
                     )
-                    # content: str = index_messages[target_index].content
+
+                    rec = _IndexableRecord.from_message(entry.content)
+                    if not rec:
+                        # This shouldn't be possible, considering the
+                        # search function explicitly disallows that.
+                        raise DatabaseCorruptionError(
+                            "search function found null entry somehow"
+                        )
+
+                    sets_list.append(set(rec.record_ids))
 
         main_table = await self.guild.fetch_channel(
             table_metadata.table_channel
@@ -699,7 +824,7 @@ class Database:
                 f"expected {main_table!r} to be a TextChannel"
             )
 
-        table = self._tables[table_name]
+        table = self.tables[table_name]
         records = []
         for record_ids in sets_list:
             for record_id in record_ids:
@@ -748,8 +873,8 @@ class Database:
         for _ in range(amount):
             await index_channel.send("null")
 
-    # This needs to be async for use in gather()
     async def _set_open(self) -> None:
+        # await self.wait_ready()
         self.open = True
 
     async def login(self, bot_token: str) -> None:
@@ -815,6 +940,9 @@ class Database:
         Close the bot connection.
         """
         if not self.open:
+            # If something went wrong in startup, for example, then
+            # we need to release the setup lock.
+            self._setup_event.set()
             raise ValueError(
                 "cannot close a connection that is not open",
             )
@@ -856,18 +984,62 @@ class Database:
             await self.wait_ready()
             yield
         finally:
-            await self.close()
+            if self.open:  # Something could have gone wrong
+                await self.close()
 
     def table(self, clas: T) -> T:
+        """
+        Mark a `Table` type as part of a database.
+        This method is meant to be used as a decorator.
+
+        Args:
+            clas: Type object to attach.
+
+        Example:
+            ```py
+            import discobase
+
+            db = discobase.Database("My database")
+
+            @db.table
+            class MySchema(discobase.Table):
+                foo: int
+                bar: str
+
+            # ...
+            ```
+
+        Returns:
+            The same object passed to `clas` -- this is in order
+            to allow use as a decorator.
+        """
         if not issubclass(clas, Table):
             raise TypeError(
                 f"{clas} is not a subclass of Table, did you forget it?",
             )
 
+        # Some implementation information.
+        # __disco_database__ stores a reference to the database object, to
+        # allow access to storage methods from table objects.
+        #
+        # Technically speaking, we're violating some rules related to
+        # method privacy, as a table will access methods prefixed with _ from
+        # outside the database class. It's not *that* big a deal, but it's
+        # worth noting.
         clas.__disco_database__ = self
+
+        # This is up for criticism -- instead of using Pydantic's
+        # `model_fields` attribute, we invent our own `__disco_keys__` instead.
+        #
+        # Partially, this is due to the fact that we want `__disco_keys__` to
+        # be, more or less, stable throughout the codebase.
+        #
+        # However, I don't think Pydantic would mess with `model_fields`, as
+        # that's a public API, and hence why this could possibly be
+        # considered as bad design.
         for field in clas.model_fields:
             clas.__disco_keys__.add(field)
 
         clas.__disco_name__ = clas.__name__.lower()
-        self._tables[clas.__disco_name__] = clas
+        self.tables[clas.__disco_name__] = clas
         return clas
