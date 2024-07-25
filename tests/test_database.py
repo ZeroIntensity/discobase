@@ -1,4 +1,5 @@
 import os
+import string
 
 import discord
 import pytest
@@ -57,13 +58,13 @@ async def test_metadata_channel(database: discobase.Database):
 
 
 async def test_schemas(database: discobase.Database):
-    class User(discobase.Table):
+    class Bar(discobase.Table):
         name: str
         password: str
 
     with pytest.raises(DatabaseTableError):
         # No database attached
-        await User(name="Peter", password="foobar").save()
+        await Bar(name="Peter", password="foobar").save()
 
     with pytest.raises(DatabaseTableError):
         # Missing `Table` subclass
@@ -72,19 +73,33 @@ async def test_schemas(database: discobase.Database):
             name: str
             password: str
 
-    User = database.table(User)
+    Bar = database.table(Bar)
     with pytest.raises(DatabaseTableError):
         # Not ready
-        await User(name="Peter", password="foobar").save()
+        await Bar(name="Peter", password="foobar").save()
 
     await database.build_tables()
-    user = User(name="Peter", password="foobar")
+    user = Bar(name="Peter", password="foobar")
     await user.save()
-    assert (await User.find(name="Peter"))[0] == user
+    assert (await Bar.find(name="Peter"))[0] == user
 
     with pytest.raises(DatabaseTableError):
         # Duplicate table name
         @database.table
-        class User(discobase.Table):
+        class Bar(discobase.Table):
             name: str
             password: str
+
+
+async def test_resizing(database: discobase.Database):
+    @database.table
+    class User(discobase.Table):
+        name: str
+        password: str
+
+    await database.build_tables()
+
+    for name in string.ascii_letters:
+        await User(name=name, password="test").save()
+
+    assert len(await User.find(password="test")) == len(string.ascii_letters)
