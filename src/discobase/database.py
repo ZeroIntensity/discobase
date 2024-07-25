@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import traceback
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -77,14 +78,50 @@ class Database:
         # We need to keep a strong reference to the free-flying
         # task
         self._setup_event = asyncio.Event()
+        self._on_ready_exc: BaseException | None = None
+        # See https://github.com/ZeroIntensity/discobase/issues/49
+        #
+        # `on_ready` in discord.py swallows all exceptions, which
+        # goes against some connect-and-disconnect behavior
+        # that we want to allow in discobase.
+        #
+        # We need to store the exception, and then raise in _not_connected()
+        # in order to properly handle it, otherwise the discord.py
+        # logger just swallows it and pretends nothing happened.
+        #
+        # This also caused a deadlock with _setup_event, which caused
+        # CI to run indefinitely.
 
         @self.bot.event
         async def on_ready() -> None:
-            0 / 0
-            await self.init()
+            try:
+                await self.init()
+            except BaseException as e:
+                await self.bot.close()
+                if self._task:
+                    self._task.cancel("bot startup failed")
 
-    @staticmethod
-    def _not_connected() -> NoReturn:
+                self._setup_event.set()
+                self._on_ready_exc = e
+                raise  # This is swallowed!
+
+    def _not_connected(self) -> NoReturn:
+        """
+        Complain about the database not being connected.
+
+        Generally speaking, this is called when `guild` or something
+        other is `None`. However, this has a second use: raising
+        an exception caught in `on_ready`. discord.py swallows that
+        error and writes it to it's logger, which we don't want.
+
+        Errors raised in `on_ready` are not propagated on
+        bot startup, they are saved and raised here instead, so
+        technically speaking, this method can raise more than just
+        a `NotConnectedError`.
+        """
+        if self._on_ready_exc:
+            raise self._on_ready_exc
+
         raise NotConnectedError(
             "not connected to the database, did you forget to login?"
         )

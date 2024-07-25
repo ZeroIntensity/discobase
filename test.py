@@ -1,6 +1,7 @@
-import discobase
 import asyncio
 import os
+
+import discobase
 
 
 async def main():
