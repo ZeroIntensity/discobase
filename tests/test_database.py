@@ -10,7 +10,7 @@ from discobase.exceptions import DatabaseTableError
 
 @pytest.fixture
 async def database():
-    db = discobase.Database("test")
+    db = discobase.Database("discobase test")
     db.login_task(os.environ["TEST_BOT_TOKEN"])
     await db.wait_ready()
     if db.guild:
