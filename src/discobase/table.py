@@ -67,27 +67,6 @@ class Table(BaseModel):
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:
-        """
-        Find a list of instances of the schema type.
-
-        Args:
-            **kwargs: Values to search for. These should be keys in the schema.
-
-        Example:
-            ```py
-            import discobase
-
-            db = discobase.Database("My database")
-
-            @db.table
-            class User(discobase.Table):
-                name: str
-                password: str
-
-            # Using top-level await for this example
-            await User.find(password="foobar").save()
-            ```
-        """
         cls._ensure_db()
         assert cls.__disco_database__
         return await cls.__disco_database__._find_records(
