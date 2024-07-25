@@ -5,6 +5,12 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import datetime as dt
 
+"""
+How to Use:
+1. Use EmbedfromContent for your database outputs and assign to variable.
+2. Use Arrow buttons class with EmbedfromContent output as content argument and assign to variable.
+3. Input the ArrowButton class as the view, and the embeds as the content in interaction.send_message.
+"""
 
 class ArrowButtons(discord.ui.View):
     def __init__(self, content: list[discord.Embed]) -> None:
