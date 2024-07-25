@@ -126,7 +126,6 @@ class Database:
                 self._on_ready_exc = e
                 raise  # This is swallowed!
 
-    @logger.catch(reraise=True)
     def _not_connected(self) -> NoReturn:
         """
         Complain about the database not being connected.
@@ -575,10 +574,20 @@ class Database:
         )
         old_size: int = metadata.max_records // 2
         await self._resize_hash(channel, old_size)
-        metadata.time_table[time_snowflake(datetime.now())] = (
+        rng = (
             old_size,
             metadata.max_records,
         )
+
+        for snowflake, time_range in metadata.time_table.copy().items():
+            # We only want one time stamp for the range, this forces
+            # the latest one to always be used -- that's a good thing,
+            # we don't want to risk having messages from the previous range
+            # in this one.
+            if time_range == rng:
+                del metadata.time_table[snowflake]
+
+        metadata.time_table[time_snowflake(datetime.now())] = rng
 
         # Now, we have to move everything into the correct position.
         #
@@ -688,6 +697,29 @@ class Database:
             f"Table {metadata.name} is now of size {metadata.max_records}"
         )
 
+    async def _inc_records(self, metadata: Metadata) -> None:
+        """
+        Increment the `current_records` number on the
+        target metadata. This resizes the table if the maximum
+        size is reached.
+
+        Args:
+            metadata: Metadata object to increment `current_records` on.
+        """
+        if not self._metadata_channel:
+            self._not_connected()
+
+        metadata.current_records += 1
+        if metadata.current_records > metadata.max_records:
+            logger.info("The table is full! We need to resize it.")
+            await self._resize_table(metadata)
+
+        await self._edit_message(
+            self._metadata_channel,
+            metadata.message_id,
+            metadata.model_dump_json(),
+        )
+
     async def _write_index_record(
         self,
         channel: discord.TextChannel,
@@ -718,6 +750,7 @@ class Database:
 
         if not serialized_content:
             logger.info("This is a null entry, we can just update in place.")
+            await self._inc_records(metadata)
             message_content = _IndexableRecord(
                 key=hashed,
                 record_ids=[
@@ -726,6 +759,10 @@ class Database:
             )
             await entry_message.edit(content=message_content.model_dump_json())
         elif serialized_content.key == hashed:
+            # See https://github.com/ZeroIntensity/discobase/issues/50
+            #
+            # We don't want to call _inc_records() here, because we aren't
+            # using up a `null` space.
             logger.info("This already exists, let's append to the data.")
             serialized_content.record_ids.append(record_id)
             await entry_message.edit(
@@ -733,6 +770,7 @@ class Database:
             )
         else:
             logger.info("Hash collision!")
+            await self._inc_records(metadata)
             index_message = await self._find_collision_message(
                 channel,
                 metadata,
@@ -761,16 +799,6 @@ class Database:
             self._not_connected()
 
         table_metadata = self._get_table_metadata(record.__disco_name__)
-        table_metadata.current_records += 1
-        if table_metadata.current_records > table_metadata.max_records:
-            logger.info("The table is full! We need to resize it.")
-            await self._resize_table(table_metadata)
-
-        await self._edit_message(
-            self._metadata_channel,
-            table_metadata.message_id,
-            table_metadata.model_dump_json(),
-        )
 
         record_data = _Record(
             content=urlsafe_b64encode(  # Record JSON data is stored in base64
