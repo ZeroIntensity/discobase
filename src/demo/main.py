@@ -4,7 +4,7 @@ import asyncio
 import os
 
 import discord
-from commands import bookmark_message_callback
+from commands import bookmark_message_callback, get_bookmarks
 from models import db
 
 
@@ -13,6 +13,7 @@ class Bot(discord.Client):
         super().__init__(intents=discord.Intents.all())
         self.tree = discord.app_commands.CommandTree(self)
         self.bookmark_context_menu = discord.app_commands.ContextMenu(name="Bookmark", callback=bookmark_message_callback)
+        self.tree.add_command(get_bookmarks)
         self.tree.add_command(self.bookmark_context_menu)
 
     async def on_ready(self) -> None:
