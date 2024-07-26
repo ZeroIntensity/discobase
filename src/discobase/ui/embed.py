@@ -103,8 +103,7 @@ class EmbedFromContent:
         self.page_number = 0
         self.page_total = 0
         self.url = "https://github.com/ZeroIntensity/discobase"
-        self.icon_url = ("https://static.vecteezy.com/system/resources/previews/018/930/500/original/discord-logo"
-                         "-discord-icon-transparent-free-png.png")
+        self.icon_url = "https://i.imgur.com/2QH3tEQ.png"
         time = dt.now()
         self.footer = f"page {self.page_number}/{self.page_total}//{time.strftime('%I:%M %p')} // {time.strftime(
             '%d/%m/%Y')}"
