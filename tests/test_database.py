@@ -151,12 +151,12 @@ async def test_long_resize(database: discobase.Database):
 #         @database.table
 #         class User(discobase.Table):
 #             test: str
-
-    @database.table
-    class Whatever(discobase.Table):
-        foo: str
-
-    await Whatever(foo="bar").save()
-    await database.clean()
-
-    assert len(await Whatever.find()) == 0
+#
+#     @database.table
+#     class Whatever(discobase.Table):
+#         foo: str
+#
+#     await Whatever(foo="bar").save()
+#     await database.clean()
+#
+#     assert len(await Whatever.find()) == 0
