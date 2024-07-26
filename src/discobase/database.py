@@ -71,6 +71,7 @@ class Database:
         self._database_metadata: dict[str, Metadata] = {}
         """A dictionary containing all of the table `Metadata` entries"""
         self._task: asyncio.Task[None] | None = None
+        self.bot.db = self
         # We need to keep a strong reference to the free-flying
         # task
         self._setup_event = asyncio.Event()
