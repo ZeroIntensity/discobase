@@ -27,9 +27,9 @@ class Utility(commands.Cog):
     ) -> None:
         table_name = table.name.replace("-", " ")
         try:
-            table = [table for table in self.bot.db._tables if table.__disco_name__ == table_name][0]  # Table object
+            table = self.db._tables[table_name]  # Table object
         except IndexError:
-            await interaction.response.send_message(f"The table '{table_name} does not exist.")
+            await interaction.response.send_message(f"The table '{table_name}' does not exist.")
             return
 
         # Get columns and values in data variable; json format or | separators?
