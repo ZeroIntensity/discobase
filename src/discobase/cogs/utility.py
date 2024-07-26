@@ -94,8 +94,8 @@ class Utility(commands.Cog):
     ):
         pass
 
-    @app_commands.command(description="Deletes all database channels.")
-    async def delete_channels(
+    @app_commands.command(description="Deletes all database tables and records.")
+    async def reset(
             self,
             interaction: discord.Interaction
     ):
