@@ -604,6 +604,21 @@ class Database:
         await asyncio.gather(*coros)
         del self._database_metadata[table_name]
 
+    async def _resize_hash(
+        self,
+        index_channel: discord.TextChannel,
+        amount: int,
+    ) -> None:
+        """
+        Increases the hash for `index_channel` by amount
+
+        Args:
+            index_channel: the channel that contains index data for a database
+            amount: the amount to increase the size by
+        """
+        for _ in range(amount):
+            await index_channel.send("null")
+
     async def _resize_channel(
         self,
         metadata: Metadata,
@@ -1055,24 +1070,40 @@ class Database:
 
         return meta
 
-    async def _resize_hash(
-        self,
-        index_channel: discord.TextChannel,
-        amount: int,
-    ) -> None:
-        """
-        Increases the hash for `index_channel` by amount
-
-        Args:
-            index_channel: the channel that contains index data for a database
-            amount: the amount to increase the size by
-        """
-        for _ in range(amount):
-            await index_channel.send("null")
-
+    # This needs to be async for use in gather()
     async def _set_open(self) -> None:
-        # await self.wait_ready()
         self.open = True
+
+    async def clean(self) -> None:
+        """
+        Perform a full clean of the database.
+
+        This method erases all metadata, all entries, and all tables. After
+        calling this, a server loses any trace of the database ever being
+        there.
+
+        This action is irreversible.
+        """
+        logger.info("Cleaning the database!")
+
+        if not self._metadata_channel:
+            self._not_connected()
+
+        coros: list[Coroutine] = []
+        for table, metadata in self._database_metadata.items():
+            logger.info(f"Cleaning table {table}")
+            table_channel = self._find_channel(metadata.table_channel)
+            coros.append(table_channel.delete())
+
+            for cid in metadata.index_channels.values():
+                channel = self._find_channel(cid)
+                coros.append(channel.delete())
+
+        logger.debug(f"Gathering deletion coros: {coros}")
+        await asyncio.gather(*coros)
+        logger.info("Deleting database metadata.")
+        self._database_metadata = {}
+        await self._metadata_channel.delete()
 
     async def login(self, bot_token: str) -> None:
         """
