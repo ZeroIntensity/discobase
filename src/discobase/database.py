@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pkgutil import iter_modules
 from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
-                    TypeVar)
+                    TypeVar, Union)
 
 import discord
 from discord.ext import commands
@@ -23,7 +23,7 @@ from .table import Table
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = str | int
+SupportsDiscoHash = Union[str, int]
 
 
 class _Record(BaseModel):
