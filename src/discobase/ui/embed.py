@@ -12,6 +12,7 @@ How to Use:
 
 __all__ = ['ArrowButtons', 'EmbedFromContent', 'EmbedStyle']
 
+
 class ArrowButtons(discord.ui.View):
     def __init__(self, content: list[discord.Embed]) -> None:
         super().__init__(timeout=None)
