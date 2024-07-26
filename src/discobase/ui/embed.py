@@ -5,7 +5,8 @@ import discord
 
 """
 How to Use:
-1. Use EmbedfromContent for your database outputs and assign to variable.
+1. Use EmbedfromContent for your database outputs with .create() and assign to a variable.
+    e.g. EmbedfromContent(title="something", content={"foo":"bar"}, headers=["foo"], style="TABLE").create()
 2. Use Arrow buttons class with EmbedfromContent output as content argument and assign to variable.
 3. Input the ArrowButton class as the view, and the embeds as the content in interaction.send_message.
 """
@@ -110,11 +111,12 @@ class EmbedFromContent:
 
         self.style = style
 
+    def create(self) -> list[discord.Embed]:
         match self.style:
             case "column":
-                self._column_display()
+                return self._column_display()
             case "table":
-                self._table_display()
+                return self._table_display()
             case _:
                 raise ValueError("Invalid style input.")
 
