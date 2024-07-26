@@ -1,5 +1,7 @@
 import os
+import random
 import string
+import sys
 
 import discord
 import pytest
@@ -99,7 +101,41 @@ async def test_resizing(database: discobase.Database):
 
     await database.build_tables()
 
-    for name in string.ascii_letters:
+    things: list[str] = [
+        "aa",
+        "bbbbbb",
+        f"cc{random.randint(100, 10000)}",
+        f"{random.randint(1000, 100000)}dd{random.randint(10000, 100000)}",
+        "".join(
+            random.choices(
+                string.ascii_letters,
+                k=random.randint(10, 40),
+            )
+        ),
+    ]
+
+    for name in things:
         await User(name=name, password="test").save()
 
-    assert len(await User.find(password="test")) == len(string.ascii_letters)
+    items = await User.find(password="test")
+    assert len(items) == len(things)
+    for i in items:
+        assert i.name in things
+
+
+# Very long, run only on 3.12
+@pytest.mark.skipif(sys.version_info != (3, 12))
+async def test_long_resize(database: discobase.Database):
+    @database.table
+    class X(discobase.Table):
+        foo: str
+
+    await database.build_tables()
+
+    for char in string.ascii_letters:
+        await X(foo=char).save()
+
+    items = await X.find()
+    assert len(items) == len(string.ascii_letters)
+    for i in items:
+        assert i.foo in string.ascii_letters

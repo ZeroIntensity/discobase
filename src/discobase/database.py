@@ -37,7 +37,7 @@ class _IndexableRecord(BaseModel):
     """Hashed value of the key."""
     record_ids: List[int]
     """Message IDs of the records that correspond to this key."""
-    _next_value: _IndexableRecord | None = None
+    next_value: _IndexableRecord | None = None
     """
     Temporary placeholder value for the next entry.
     Only for use in resizing.
@@ -99,7 +99,8 @@ class Database:
         # task
         self._setup_event = asyncio.Event()
         self._on_ready_exc: BaseException | None = None
-        # See https://github.com/ZeroIntensity/discobase/issues/49
+
+        # Here be dragons: https://github.com/ZeroIntensity/discobase/issues/49
         #
         # `on_ready` in discord.py swallows all exceptions, which
         # goes against some connect-and-disconnect behavior
@@ -111,7 +112,6 @@ class Database:
         #
         # This also caused a deadlock with _setup_event, which caused
         # CI to run indefinitely.
-
         @self.bot.event
         @logger.catch(reraise=True)
         async def on_ready() -> None:
@@ -244,12 +244,13 @@ class Database:
         logger.info("Waiting until the database is ready.")
         await self._setup_event.wait()
         logger.info("Done waiting!")
-        # See #49, we need to propagate errors in on_ready here.
+        # See #49, we need to propagate errors in `on_ready` here.
         if self._on_ready_exc:
             logger.error("on_ready() failed, propagating now.")
             raise self._on_ready_exc
 
     def _find_channel(self, cid: int) -> discord.TextChannel:
+        # TODO: Implement caching for this function.
         if not self.guild:
             self._not_connected()
 
@@ -286,29 +287,32 @@ class Database:
         logger.debug(
             f"Looking up hash collision entry using search function: {search_func}"  # noqa
         )
-        offset: int = index + 1
+        offset: int = index
         while True:
-            logger.debug(f"Hash collision search at index: {offset}")
+            if (offset + 1) >= metadata.max_records:
+                logger.debug("We need to wrap around the table.")
+                offset = 0
+            else:
+                offset += 1
+
             if offset == index:
                 raise DatabaseCorruptionError(
                     f"index channel {channel!r} has no free messages, table was likely not resized."  # noqa
                 )
 
-            if (offset + index) >= metadata.max_records:
-                # We need to wrap around the table.
-                # Since we increment at the end, this is -1 to make 0.
-                offset = -1
-
             message = await self._lookup_message(
-                channel, metadata, offset + index
+                channel,
+                metadata,
+                offset,
+            )
+            logger.debug(
+                f"Hash collision search at index: {offset} {message=}",
             )
             if search_func(message.content):
                 logger.debug(
                     f"Done searching for collision message: {message.content}"
                 )
                 return message
-
-            offset += 1
 
     async def _edit_message(
         self,
@@ -318,6 +322,9 @@ class Database:
     ) -> None:
         """
         Edit a message given the channel, message ID, and content.
+
+        This should *not* be used over `discord.Message.edit`, it's simply
+        a handy utility to use when you only have the message ID.
         """
         # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
@@ -389,11 +396,13 @@ class Database:
             An integer, positive or negative, representing the unique hash.
             This is always the same thing across programs.
         """
+        logger.debug(f"Hashing: {value!r}")
         if isinstance(value, str):
             hashed_str = int(
                 hashlib.sha1(value.encode("utf-8")).hexdigest(),
                 16,
             )
+            logger.debug(f"Hashed string {value!r} into {hashed_str}")
             return hashed_str
         elif isinstance(value, int):
             return value
@@ -511,12 +520,11 @@ class Database:
                     f"only some key channels exist: {', '.join(matching)}",
                 )
 
-            # The table is already set up, no need to do anything more.
-            logger.info("Table is already set up: {table.__disco_name__}")
+            logger.info(f"Table is already set up: {table.__disco_name__}")
             table.__disco_ready__ = True
             return
 
-        logger.info("Building table: {table.__disco_name__}")
+        logger.info(f"Building table: {table.__disco_name__}")
 
         # The primary table holds the actual records
         primary_table = await self.guild.create_text_channel(name)
@@ -601,6 +609,16 @@ class Database:
         metadata: Metadata,
         channel: discord.TextChannel,
     ) -> None:
+        """
+        The implementation of resizing a channel. This method assumes
+        that `metadata.max_records` has already been doubled.
+
+        This is meant for use in `gather()`, for optimal performance.
+
+        Args:
+            metadata: Metadata for the entire table.
+            channel: Index channel to resize.
+        """
         logger.debug(
             f"Resizing channel: {channel!r} for table {metadata.name}",
         )
@@ -620,7 +638,6 @@ class Database:
                 del metadata.time_table[snowflake]
 
         metadata.time_table[time_snowflake(datetime.now())] = rng
-
         # Now, we have to move everything into the correct position.
         #
         # Note that this shouldn't put everything into memory, as
@@ -630,6 +647,7 @@ class Database:
             limit=old_size,
             oldest_first=True,
         ):
+            msg = await channel.fetch_message(msg.id)  # TODO: Remove this
             record = _IndexableRecord.from_message(msg.content)
             if not record:
                 continue
@@ -641,68 +659,100 @@ class Database:
                 new_index,
             )
             next_record = _IndexableRecord.from_message(target.content)
+            inplace: bool = True
+            overwrite: bool = True
+
             if next_record:
-                next_record._next_value = record
-                if next_record._next_value:
+                if next_record.next_value:
                     logger.info("Hash collision in resize!")
                     target = await self._find_collision_message(
                         channel,
                         metadata,
                         new_index,
                     )
+                    # `inplace` is True, so we fall
+                    # through to the inplace edit.
+                    #
+                    # To be fair, I'm not too sure if this is
+                    # the best approach, this might be worth
+                    # refactoring in the future.
                 else:
+                    logger.info("Updating record at the new index.")
+                    inplace = False
                     logger.debug(
                         f"{next_record} marked as the next value location ({target.id=})"  # noqa
                     )
 
-                await target.edit(content=next_record.model_dump_json())
-            else:
+                    if record.next_value:
+                        record.next_value = None
+                        # Here be dragons: if we overwrite the `next_value`
+                        # with `None` to prevent a doubly-nested copy in the
+                        # JSON, we have to mark this message to *not* be
+                        # overwritten, otherwise we lose that data.
+                        overwrite = False
+
+                    next_record.next_value = record
+                    content = next_record.model_dump_json()
+                    logger.debug(f"Editing {target.content} to {content}")
+                    await target.edit(content=content)
+
+            if inplace:
                 # In case of a hash collision, we want to mark
-                # this as having a `_next_value`, so it doesn't get
+                # this as having a `next_value`, so it doesn't get
                 # overwritten.
                 #
                 # We copy this to prevent a recursive model dump.
-                copy = record.model_copy()
-                copy._next_value = record
-                await target.edit(content=copy.model_dump_json())
+                if record.next_value:
+                    record.next_value = None
+                    overwrite = False
 
-            if not record._next_value:
+                copy = record.model_copy()
+                copy.next_value = record
+                logger.info(
+                    "Target index does not have an entry, updating in-place."
+                )
+                content = copy.model_dump_json()
+                logger.debug(f"Editing in-place null to {content}")
+                assert target.content == "null"
+                await target.edit(content=content)
+
+            # Technically speaking, the index could
+            # remain the same. We need to check for that.
+            if (not record.next_value) and (target != msg) and overwrite:
                 await msg.edit(content="null")
 
-        # Finally, all the _next_value attributes have been set, we can
+        # Finally, all the next_value attributes have been set, we can
         # go through and update each record.
         #
-        # The overall algorithm is O(2n), but it's much
-        # more scalable that trying to put the entire table into memory
-        # so we can resize it.
+        # The overall algorithm is O(2n), but it's much more scalable
+        # than trying to put the entire table into memory in order to
+        # resize it.
         #
         # This algorithm is pretty much infinitely scalable, if you factor
         # out Discord's ratelimit.
         async for msg in channel.history(
-            limit=old_size,
+            limit=metadata.max_records,
             oldest_first=True,
         ):
+            msg = await channel.fetch_message(msg.id)  # TODO: Remove this
             record = _IndexableRecord.from_message(msg.content)
             if not record:
                 continue
 
-            if not record._next_value:
-                continue
+            logger.debug(f"Handling movement of {record!r}")
+            if not record.next_value:
                 raise DatabaseCorruptionError(
-                    "all existing records after resize should have _next_value",  # noqa
+                    "all existing records after resize should have next_value",  # noqa
                 )
 
-            new_index: int = self._to_index(metadata, record.key)
-            target = await self._lookup_message(
-                channel,
-                metadata,
-                new_index,
-            )
-            logger.debug(
-                f"Replacing {target.content} with {record._next_value!r}"
-            )
+            if record.next_value.next_value:
+                raise DatabaseCorruptionError(
+                    f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
+                )
 
-            await target.edit(content=record._next_value.model_dump_json())
+            content = record.next_value.model_dump_json()
+            logger.debug(f"Replacing {msg.content} with {content}")
+            await msg.edit(content=content)
 
     async def _resize_table(self, metadata: Metadata) -> None:
         if not self._metadata_channel:
@@ -710,7 +760,7 @@ class Database:
 
         metadata.max_records *= 2
         logger.info(
-            f"Table {metadata.name} is full! Resizing it to {metadata.max_records}"  # noqa
+            f"Resizing table {metadata.name} to {metadata.max_records}"  # noqa
         )
         await asyncio.gather(
             *[
@@ -873,7 +923,6 @@ class Database:
 
         Args:
             table_name: Name of the table, may be unprocessed.
-                    next_record._next_value = record
             query: Dictionary containing field-value pairs.
 
         Returns:
@@ -888,6 +937,7 @@ class Database:
         table_metadata = self._get_table_metadata(table_name.lower())
         sets_list: list[set[int]] = []
 
+        logger.debug(f"Looking for query {query!r} in {table_name}")
         for field, value in query.items():
             if field not in table_metadata.keys:
                 raise ValueError(
@@ -914,7 +964,7 @@ class Database:
                 )
 
                 if not serialized_content:
-                    # Nothing was found
+                    logger.info("Nothing was found.")
                     continue
 
                 if serialized_content.key == hashed_field:
@@ -946,6 +996,21 @@ class Database:
                             "search function found null entry somehow"
                         )
 
+                    sets_list.append(set(rec.record_ids))
+
+        if not query:
+            logger.info("Query is empty, finding all entries!")
+            for name, cid in table_metadata.index_channels.items():
+                channel = self._find_channel(cid)
+                async for msg in channel.history(limit=None):
+                    logger.debug(f"Dealing with message in channel: {msg}")
+                    rec = _IndexableRecord.from_message(msg.content)
+                    if not rec:
+                        continue
+
+                    logger.debug(
+                        f"Appended to sets_list: {', '.join([str(i) for i in rec.record_ids])}"  # noqa
+                    )
                     sets_list.append(set(rec.record_ids))
 
         main_table = await self.guild.fetch_channel(
