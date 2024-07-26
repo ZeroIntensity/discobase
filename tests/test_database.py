@@ -10,7 +10,7 @@ import discobase
 from discobase.exceptions import DatabaseTableError
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def database():
     db = discobase.Database("discobase test")
     db.login_task(os.environ["TEST_BOT_TOKEN"])
@@ -26,7 +26,7 @@ async def database():
         await db.close()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def bot(database: discobase.Database):
     return database.bot
 
