@@ -1,49 +1,39 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
-from threading import Thread
-import time
+import os
 
 import discord
-
-from .config import BOT_TOKEN
-
-__all__ = ("Database",)
-
-
+from commands import bookmark_message_callback
+from models import db
 
 
 class Bot(discord.Client):
     def __init__(self):
         super().__init__(intents=discord.Intents.all())
-        
-        self.guild: discord.Guild | None = None
-        self._task: asyncio.Task[None] | None = None
-        
-        
-    def startup(self, bot_token: str) -> None:
-        self.starttime = time.time()
-        self.run(bot_token)
+        self.tree = discord.app_commands.CommandTree(self)
+        self.bookmark_context_menu = discord.app_commands.ContextMenu(name="Bookmark", callback=bookmark_message_callback)
+        self.tree.add_command(self.bookmark_context_menu)
 
     async def on_ready(self) -> None:
+        await self.tree.sync()
         print(f"Logged in as {self.user}")
-    
-    async def on_message(self, message: discord.Message) -> None:
-        if message.content.startswith("!demobot!ping"):
-            await message.channel.send("Pong!")
-        if message.content.startswith("!demobot!shutdown"):
-            self._task = asyncio.create_task(self.close())
-        if message.content.startswith("!demobot!uptime"):
-            uptime = time.time() - self.starttime
-            # format uptime
-            uptime = time.strftime("%H:%M:%S", time.gmtime(uptime))
-            await message.channel.send(f"Uptime: {uptime}")
-    
-# bot will
-# store bookmarks
-# query them
+        print(f"Loaded the following commands: {await self.tree.fetch_commands()}")
 
-def main() -> None:
-    bot = Bot()
-    bot.startup(BOT_TOKEN)
+    async def on_error(self, event_method: str, /, *args: asyncio.Any, **kwargs: asyncio.Any) -> None:
+        return await super().on_error(event_method, *args, **kwargs)
+
+
+discord.utils.setup_logging()
+bot = Bot()
+
+async def main():
+        async with db.conn(os.getenv("DB_BOT_TOKEN")):
+            try:
+                await bot.start(os.getenv("BOOKMARK_BOT_TOKEN"))
+            finally:
+                await bot.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
