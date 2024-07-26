@@ -124,7 +124,7 @@ async def test_resizing(database: discobase.Database):
 
 
 @pytest.mark.skipif(
-    sys.version_info != (3, 12),
+    sys.version_info[1] != 12,
     reason="Very long, only run on 3.12",
 )
 async def test_long_resize(database: discobase.Database):
