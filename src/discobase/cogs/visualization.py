@@ -68,9 +68,42 @@ class Visualization(commands.Cog):
         table: discord.TextChannel,
         name: str,
     ) -> None:
-        await interaction.response.send_message(
-            f"I am showing you data from the column `{name}`"
-            f" in table `{table}`."
+        message = await interaction.response.send_message(
+            f"Searching for table `{table.name}`..."
+        )
+        try:
+            col_table = self.db._tables[table.name]
+            await message.edit_message(
+                f"Table `{col_table.__disco_name__}` found! Gathering data..."
+            )
+        except IndexError:
+            await message.edit_message(
+                f"The table `{table.name}` does not exist."
+            )
+            return
+
+        try:
+            table_column = getattr(col_table.__disco_keys__, name)
+        except AttributeError:
+            await message.edit_message(
+                f"The column `{name}` does not exist in the table `{col_table.__disco_name__}."
+            )
+            return
+
+        data = [table_column]
+
+        embeds = EmbedFromContent(
+            title=f"Column `{name.title()}` From Table `{col_table.__disco_name__.title()}`",
+            content=data,
+            headers=None,
+            style=EmbedStyle("COLUMN")
+        ).create()
+
+        view = ArrowButtons(content=embeds)
+
+        await message.edit_message(
+            embeds=embeds,
+            view=view
         )
 
     @app_commands.command()
