@@ -123,8 +123,10 @@ async def test_resizing(database: discobase.Database):
         assert i.name in things
 
 
-# Very long, run only on 3.12
-@pytest.mark.skipif(sys.version_info != (3, 12))
+@pytest.mark.skipif(
+    sys.version_info != (3, 12),
+    reason="Very long, only run on 3.12",
+)
 async def test_long_resize(database: discobase.Database):
     @database.table
     class X(discobase.Table):
