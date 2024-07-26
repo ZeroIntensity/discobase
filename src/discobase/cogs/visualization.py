@@ -10,6 +10,7 @@ class Visualization(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.db = self.bot.db
 
     @app_commands.command(description="View the selected table.")
     @app_commands.describe(name="The name of the table.")
