@@ -6,8 +6,8 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pkgutil import iter_modules
-from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
-                    TypeVar)
+from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Optional,
+                    Type, TypeVar, Union)
 
 import discord
 from discord.ext import commands
@@ -23,7 +23,7 @@ from .table import Table
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = str | int
+SupportsDiscoHash = Union[str, int]
 
 
 class _Record(BaseModel):
@@ -37,7 +37,7 @@ class _IndexableRecord(BaseModel):
     """Hashed value of the key."""
     record_ids: List[int]
     """Message IDs of the records that correspond to this key."""
-    next_value: _IndexableRecord | None = None
+    next_value: Optional[_IndexableRecord] = None
     """
     Temporary placeholder value for the next entry.
     Only for use in resizing.
@@ -157,7 +157,6 @@ class Database:
                 logger.info("Found metadata channel!")
                 break
 
-        logger.info("No metadata channel found, creating one.")
         return found_channel or await self.guild.create_text_channel(
             name=metadata_channel_name
         )
@@ -195,6 +194,11 @@ class Database:
         await self.build_tables()
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
+
+        assert self._metadata_channel is not None
+        logger.info(
+            f"Invite to server: {self._metadata_channel.create_invite()}"
+        )
 
     async def build_tables(self) -> None:
         """
@@ -604,6 +608,21 @@ class Database:
         # We gather() here for performance
         await asyncio.gather(*coros)
         del self._database_metadata[table_name]
+
+    async def _resize_hash(
+        self,
+        index_channel: discord.TextChannel,
+        amount: int,
+    ) -> None:
+        """
+        Increases the hash for `index_channel` by amount
+
+        Args:
+            index_channel: the channel that contains index data for a database
+            amount: the amount to increase the size by
+        """
+        for _ in range(amount):
+            await index_channel.send("null")
 
     async def _resize_channel(
         self,
@@ -1056,24 +1075,46 @@ class Database:
 
         return meta
 
-    async def _resize_hash(
-        self,
-        index_channel: discord.TextChannel,
-        amount: int,
-    ) -> None:
-        """
-        Increases the hash for `index_channel` by amount
-
-        Args:
-            index_channel: the channel that contains index data for a database
-            amount: the amount to increase the size by
-        """
-        for _ in range(amount):
-            await index_channel.send("null")
-
+    # This needs to be async for use in gather()
     async def _set_open(self) -> None:
-        # await self.wait_ready()
         self.open = True
+
+    async def clean(self) -> None:
+        """
+        Perform a full clean of the database.
+
+        This method erases all metadata, all entries, and all tables. After
+        calling this, a server loses any trace of the database ever being
+        there.
+
+        Note that this does *not* clean the existing tables from memory, but
+        instead just marks them all as not ready.
+
+        This action is irreversible.
+        """
+        logger.info("Cleaning the database!")
+
+        if not self._metadata_channel:
+            self._not_connected()
+
+        coros: list[Coroutine] = []
+        for table, metadata in self._database_metadata.items():
+            logger.info(f"Cleaning table {table}")
+            table_channel = self._find_channel(metadata.table_channel)
+            coros.append(table_channel.delete())
+
+            for cid in metadata.index_channels.values():
+                channel = self._find_channel(cid)
+                coros.append(channel.delete())
+
+        for schema in self.tables.values():
+            schema.__disco_ready__ = False
+
+        logger.debug(f"Gathering deletion coros: {coros}")
+        await asyncio.gather(*coros)
+        logger.info("Deleting database metadata.")
+        self._database_metadata = {}
+        await self._metadata_channel.delete()
 
     async def login(self, bot_token: str) -> None:
         """
