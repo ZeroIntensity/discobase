@@ -44,7 +44,7 @@ class Utility(commands.Cog):
             new_entry = table(**data_dict)
         except TypeError:
             await interaction.response.send_message(
-                f"The keys in your data did not match the column names for {table_name}"
+                f"The keys in your data did not match the column names for {table_name}."
             )
             return
 
