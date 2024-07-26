@@ -6,8 +6,8 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pkgutil import iter_modules
-from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
-                    TypeVar)
+from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Optional,
+                    Type, TypeVar, Union)
 
 import discord
 from discord.ext import commands
@@ -23,7 +23,7 @@ from .table import Table
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = str | int
+SupportsDiscoHash = Union[str, int]
 
 
 class _Record(BaseModel):
@@ -37,7 +37,7 @@ class _IndexableRecord(BaseModel):
     """Hashed value of the key."""
     record_ids: List[int]
     """Message IDs of the records that correspond to this key."""
-    next_value: _IndexableRecord | None = None
+    next_value: Optional[_IndexableRecord] = None
     """
     Temporary placeholder value for the next entry.
     Only for use in resizing.
