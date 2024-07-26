@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from ..ui.embed import *
+from ..ui.embed import ArrowButtons, EmbedFromContent, EmbedStyle
 
 
 class Visualization(commands.Cog):
@@ -23,13 +23,20 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel,
     ) -> None:
+        message = await interaction.response.send_message(
+            f"Searching for table `{name}`..."
+        )
         try:
             table = self.db._tables[name]
+            await message.edit_message(
+                f"Table `{name}` found! Gathering data..."
+            )
         except IndexError:
-            await interaction.response.send_message(
-                f"The table '{name}' does not exist."
+            await message.edit_message(
+                f"The table `{name}` does not exist."
             )
             return
+
         table_columns = table.__disco_keys__
         data: dict[str, Any] = {}
 
@@ -40,12 +47,14 @@ class Visualization(commands.Cog):
             title=f"Table: {table.__disco_name__}",
             content=data,
             headers=table_columns,
+            style=EmbedStyle("TABLE")
         )
 
+        view = ArrowButtons(content=embeds)
 
-
-        await interaction.response.send_message(
-            f"I am showing you data from the table `{name}`."
+        await message.edit_message(
+            embeds=embeds,
+            view=view
         )
 
     @app_commands.command(description="View the column data.")
