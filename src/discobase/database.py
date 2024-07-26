@@ -196,7 +196,7 @@ class Database:
 
         assert self._metadata_channel is not None
         logger.info(
-            f"Invite to server: {self._metadata_channel.create_invite()}"
+            f"Invite to server: {await self._metadata_channel.create_invite()}"
         )
 
     async def build_tables(self) -> None:
