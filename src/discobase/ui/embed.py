@@ -10,7 +10,7 @@ How to Use:
 3. Input the ArrowButton class as the view, and the embeds as the content in interaction.send_message.
 """
 
-__all__ = ['ArrowButtons', 'EmbedFromContent']
+__all__ = ['ArrowButtons', 'EmbedFromContent', 'EmbedStyle']
 
 class ArrowButtons(discord.ui.View):
     def __init__(self, content: list[discord.Embed]) -> None:
