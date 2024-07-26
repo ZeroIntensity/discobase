@@ -47,7 +47,7 @@ class Visualization(commands.Cog):
             title=f"Table: {table.__disco_name__}",
             content=data,
             headers=table_columns,
-            style=EmbedStyle("TABLE")
+            style=EmbedStyle.TABLE
         ).create()
 
         view = ArrowButtons(content=embeds)
@@ -96,7 +96,7 @@ class Visualization(commands.Cog):
             title=f"Column `{name.title()}` From Table `{col_table.__disco_name__.title()}`",
             content=data,
             headers=None,
-            style=EmbedStyle("COLUMN")
+            style=EmbedStyle.COLUMN
         ).create()
 
         view = ArrowButtons(content=embeds)
