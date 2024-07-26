@@ -156,7 +156,6 @@ class Database:
                 logger.info("Found metadata channel!")
                 break
 
-        logger.info("No metadata channel found, creating one.")
         return found_channel or await self.guild.create_text_channel(
             name=metadata_channel_name
         )
@@ -194,6 +193,11 @@ class Database:
         await self.build_tables()
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
+
+        assert self._metadata_channel is not None
+        logger.info(
+            f"Invite to server: {self._metadata_channel.create_invite()}"
+        )
 
     async def build_tables(self) -> None:
         """
