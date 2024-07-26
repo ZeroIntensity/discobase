@@ -83,13 +83,21 @@ class Utility(commands.Cog):
 
     @app_commands.command(description="Deletes a record from a table.")
     @app_commands.describe(
-        table="The table from which you want to delete.",
+        table="The table from which you want to delete",
         record="The record you want to delete formatted as a json."
     )
     async def delete(
             self,
+            interaction: discord.Interaction,
             table: discord.TextChannel,
             record: dict
+    ):
+        pass
+
+    @app_commands.command(description="Deletes all database channels.")
+    async def delete_channels(
+            self,
+            interaction: discord.Interaction
     ):
         pass
 
