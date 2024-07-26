@@ -37,7 +37,7 @@ class User(discobase.Table):
     password: str
 
 async def main():
-    async with db.conn("my bot token"):
+    async with db.conn("My bot token"):
         ...
 
 asyncio.run(main())
