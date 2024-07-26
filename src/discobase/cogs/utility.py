@@ -90,7 +90,7 @@ class Utility(commands.Cog):
             self,
             interaction: discord.Interaction,
             table: discord.TextChannel,
-            record: dict
+            record: str
     ):
         pass
 
