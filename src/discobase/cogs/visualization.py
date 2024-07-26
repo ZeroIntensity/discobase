@@ -86,7 +86,7 @@ class Visualization(commands.Cog):
             table_column = getattr(col_table.__disco_keys__, name)
         except AttributeError:
             await message.edit_message(
-                f"The column `{name}` does not exist in the table `{col_table.__disco_name__}."
+                f"The column `{name}` does not exist in the table `{col_table.__disco_name__}`."
             )
             return
 
