@@ -1086,6 +1086,9 @@ class Database:
         calling this, a server loses any trace of the database ever being
         there.
 
+        Note that this does *not* clean the existing tables from memory, but
+        instead just marks them all as not ready.
+
         This action is irreversible.
         """
         logger.info("Cleaning the database!")
@@ -1102,6 +1105,9 @@ class Database:
             for cid in metadata.index_channels.values():
                 channel = self._find_channel(cid)
                 coros.append(channel.delete())
+
+        for schema in self.tables.values():
+            schema.__disco_ready__ = False
 
         logger.debug(f"Gathering deletion coros: {coros}")
         await asyncio.gather(*coros)

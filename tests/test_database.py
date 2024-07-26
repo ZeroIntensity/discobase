@@ -141,3 +141,22 @@ async def test_long_resize(database: discobase.Database):
     assert len(items) == len(string.ascii_letters)
     for i in items:
         assert i.foo in string.ascii_letters
+
+
+async def test_clean(database: discobase.Database):
+    await database.clean()
+
+    with pytest.raises(DatabaseTableError):
+
+        @database.table
+        class User(discobase.Table):
+            test: str
+
+    @database.table
+    class Whatever(discobase.Table):
+        foo: str
+
+    await Whatever(foo="bar").save()
+    await database.clean()
+
+    assert len(await Whatever.find()) == 0
