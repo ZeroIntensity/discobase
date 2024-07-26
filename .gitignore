@@ -32,3 +32,4 @@ build/
 
 # Builds
 dist/
+test.py
