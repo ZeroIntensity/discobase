@@ -1,3 +1,5 @@
+import json
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,6 +12,7 @@ class Utility(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.db = self.bot.db
 
 
     @app_commands.command(description="Insert new data into a table.")
@@ -23,6 +26,24 @@ class Utility(commands.Cog):
         table: discord.TextChannel,
         data: str,
     ) -> None:
+        table_name = table.name.replace("-", " ")
+        try:
+            table = [table for table in self.bot.db._tables if table.__disco_name__ == table_name][0]
+        except IndexError:
+            await interaction.response.send_message(f"The table '{table_name} does not exist.")
+            return
+
+        # Get columns and values in data variable; json format or | separators?
+        data_dict: dict = json.loads(data)
+
+        # Check if column name exists
+        # If it does then insert the data into it
+        for k, v in data_dict.keys():
+            table.k = v
+
+        # save db
+        table.save()
+
         await interaction.response.send_message(
             f"I have inserted `{data}` into `{table}` table."
         )
