@@ -48,7 +48,7 @@ class Visualization(commands.Cog):
             content=data,
             headers=table_columns,
             style=EmbedStyle("TABLE")
-        )
+        ).create()
 
         view = ArrowButtons(content=embeds)
 
