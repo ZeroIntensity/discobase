@@ -1,6 +1,10 @@
+from typing import Any
+
 import discord
 from discord import app_commands
 from discord.ext import commands
+
+from ..ui.embed import *
 
 
 class Visualization(commands.Cog):
@@ -19,6 +23,27 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel,
     ) -> None:
+        try:
+            table = self.db._tables[name]
+        except IndexError:
+            await interaction.response.send_message(
+                f"The table '{name}' does not exist."
+            )
+            return
+        table_columns = table.__disco_keys__
+        data: dict[str, Any] = {}
+
+        for col in table_columns:
+            data[col] = getattr(table, col)
+
+        embeds = EmbedFromContent(
+            title=f"Table: {table.__disco_name__}",
+            content=data,
+            headers=table_columns,
+        )
+
+
+
         await interaction.response.send_message(
             f"I am showing you data from the table `{name}`."
         )
