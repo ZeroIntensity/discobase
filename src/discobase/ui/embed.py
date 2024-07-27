@@ -198,6 +198,9 @@ class EmbedFromContent:
         return embeds
 
     def _schema_display(self) -> discord.Embed:
+        """
+        Creates an embed that has the schema information. Column names as field titles, and type as field values.
+        """
         embed = discord.Embed(
             title=self.title,
             color=self.color,
