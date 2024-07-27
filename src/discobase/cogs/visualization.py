@@ -3,6 +3,7 @@ from typing import Any
 import discord
 from discord import app_commands
 from discord.ext import commands
+from loguru import logger
 
 from ..ui.embed import ArrowButtons, EmbedFromContent, EmbedStyle
 
@@ -23,36 +24,54 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel,
     ) -> None:
-        message = await interaction.response.send_message(
+        await interaction.response.send_message(
             f"Searching for table `{name}`..."
         )
         try:
             table = self.db._tables[name]
-            await message.edit_message(
-                f"Table `{name}` found! Gathering data..."
+            await interaction.edit_original_response(
+                content=f"Table `{name}` found! Gathering data..."
             )
-        except IndexError:
-            await message.edit_message(
-                f"The table `{name}` does not exist."
+        except IndexError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"The table `{name}` does not exist."
             )
             return
 
-        table_columns = table.__disco_keys__
+        try:
+            logger.debug("Getting table columns")
+            table_columns = table.__disco_keys__
+        except Exception as e:
+            logger.error(e)
+
         data: dict[str, Any] = {}
 
-        for col in table_columns:
-            data[col] = getattr(table, col)
+        try:
+            logger.debug("Making data dict")
+            for col in table_columns:
+                data[col] = getattr(table, col)
+        except Exception as e:
+            logger.error(e)
 
-        embeds = EmbedFromContent(
-            title=f"Table: {table.__disco_name__}",
-            content=data,
-            headers=table_columns,
-            style=EmbedStyle.TABLE
-        ).create()
+        try:
+            logger.debug("Making embeds")
+            embeds = EmbedFromContent(
+                title=f"Table: {table.__disco_name__}",
+                content=data,
+                headers=table_columns,
+                style=EmbedStyle.TABLE
+            ).create()
+        except Exception as e:
+            logger.error(e)
 
-        view = ArrowButtons(content=embeds)
+        try:
+            logger.debug("Making view")
+            view = ArrowButtons(content=embeds)
+        except Exception as e:
+            logger.error(e)
 
-        await message.edit_message(
+        await interaction.edit_original_response(
             embeds=embeds,
             view=view
         )
