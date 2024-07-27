@@ -9,6 +9,7 @@ from typing_extensions import Self
 if TYPE_CHECKING:
     from .database import Database
 
+from ._cursor import TableCursor
 from .exceptions import (DatabaseLookupError, DatabaseStorageError,
                          DatabaseTableError, NotConnectedError)
 
@@ -20,12 +21,12 @@ __all__ = ("Table",)
 class Table(BaseModel):
     __disco_database__: ClassVar[Optional[Database]] = None
     """Attached `Database` object. Set by the `table()` decorator."""
+    __disco_cursor__: ClassVar[Optional[TableCursor]] = None
+    """Internal table cursor, set at initialization time."""
     __disco_keys__: ClassVar[Set[str]] = set()
     """All keys of the table, this may not change once set by `table()`."""
     __disco_name__: ClassVar[str] = "_notset"
     """Internal name of the table. Set by the `table()` decorator."""
-    __disco_ready__: ClassVar[bool] = False
-    """Whether the `Table` object has it's database channels set up."""
     __disco_id__: int = -1
     """Message ID of the record. This is only present if it was saved."""
 
@@ -41,7 +42,7 @@ class Table(BaseModel):
                 "database is not connected! did you forget to open it?"
             )
 
-        if not cls.__disco_ready__:
+        if not cls.__disco_cursor__:
             raise DatabaseTableError(
                 f"{cls.__name__} is not ready, you might want to add a call to build_tables()",  # noqa
             )
@@ -66,12 +67,13 @@ class Table(BaseModel):
             ```
         """
         self._ensure_db()
-        assert self.__disco_database__
+        assert self.__disco_cursor__
+
         if self.__disco_id__ != -1:
             raise DatabaseStorageError(
                 "this entry has already been written, did you mean to call update()?",  # noqa
             )
-        msg = await self.__disco_database__._add_record(self)
+        msg = await self.__disco_cursor__.add_record(self)
         self.__disco_id__ = msg.id
 
     async def update(self) -> None:
@@ -97,12 +99,12 @@ class Table(BaseModel):
         """
 
         self._ensure_db()
-        assert self.__disco_database__
+        assert self.__disco_cursor__
         if self.__disco_id__ == -1:
             raise DatabaseStorageError(
                 "this entry has not been written, did you mean to call save()?",  # noqa
             )
-        await self.__disco_database__._update_record(self)
+        await self.__disco_cursor__.update_record(self)
 
     async def commit(self) -> None: ...
 
@@ -127,9 +129,9 @@ class Table(BaseModel):
             ```
         """
         cls._ensure_db()
-        assert cls.__disco_database__
-        return await cls.__disco_database__._find_records(
-            cls.__disco_name__,
+        assert cls.__disco_cursor__
+        return await cls.__disco_cursor__.find_records(
+            cls,
             kwargs,
         )
 
