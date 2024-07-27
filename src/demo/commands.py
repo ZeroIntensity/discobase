@@ -11,7 +11,7 @@ async def bookmark_message_callback(interaction: discord.Interaction, message: d
 @discord.app_commands.command(name="get_bookmarks", description="Retrieve all of your bookmarks")
 async def get_bookmarks(interaction: discord.Interaction):
     records = await db_interactions.get(db, interaction)
-    if not records:
+    if len(records) == 0:
         await interaction.response.send_message("You have not bookmarked any messages")
 
 @discord.app_commands.command(name="clean_database")
