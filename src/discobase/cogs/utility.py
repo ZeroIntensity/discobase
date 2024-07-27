@@ -110,14 +110,14 @@ class Utility(commands.Cog):
             interaction: discord.Interaction,
             table: discord.TextChannel,
             record: str
-    ):
+    ) -> None:
         pass
 
     @app_commands.command(description="Resets the database, deleting all channels and unloading tables.")
     async def reset(
             self,
             interaction: discord.Interaction
-    ):
+    ) -> None:
         await interaction.response.send_message(
             content=f"Resetting the database, `{self.db.name}`..."
         )
