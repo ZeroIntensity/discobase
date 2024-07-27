@@ -45,7 +45,7 @@ class Visualization(commands.Cog):
             )
             return
 
-        table_columns = [col.title() for col in table.__disco_keys__]  # convert set to list to enable subscripting
+        table_columns = [col for col in table.__disco_keys__]  # convert set to list to enable subscripting
 
         data: dict[str:list] = {}
         for col in table_columns:
@@ -54,9 +54,12 @@ class Visualization(commands.Cog):
         table_values = await table.find()
         logger.info(table_values)
 
-        for game in table_values:
-            for col in table_columns:
-                data[col].append(getattr(game, col))
+        try:
+            for game in table_values:
+                for col in table_columns:
+                    data[col].append(getattr(game, col))
+        except Exception as e:
+            logger.exception(e)
 
         embed_from_content = embed.EmbedFromContent(
             title=f"Table: {table.__disco_name__.title()}",
