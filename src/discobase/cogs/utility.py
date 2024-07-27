@@ -43,6 +43,9 @@ class Utility(commands.Cog):
 
         # Get columns and values in data variable; json format or | separators?
         try:
+            await interaction.edit_original_response(
+                content=f"Table `{table_name} found! Adding data to table..."
+            )
             data_dict: dict = json.loads(data)
         except TypeError as e:
             logger.error(e)
@@ -66,12 +69,9 @@ class Utility(commands.Cog):
         except Exception as e:
             logger.error(e)
 
-        try:
-            await interaction.edit_original_response(
-                content=f"I have inserted `{data}` into `{table_name}` table."
-            )
-        except Exception as e:
-            logger.error(e)
+        await interaction.edit_original_response(
+            content=f"I have inserted `{data}` into `{table_name}` table."
+        )
 
     @app_commands.command(description="Modifies a record with a new value.")
     @app_commands.describe(
