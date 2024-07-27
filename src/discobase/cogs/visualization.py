@@ -73,7 +73,7 @@ class Visualization(commands.Cog):
 
         await interaction.edit_original_response(
             content="",
-            embeds=embeds,
+            embed=embeds[0],
             view=view
         )
 
@@ -127,7 +127,7 @@ class Visualization(commands.Cog):
 
         await interaction.edit_original_response(
             content="",
-            embeds=embeds,
+            embed=embeds[0],
             view=view
         )
 
