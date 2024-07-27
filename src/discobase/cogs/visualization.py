@@ -69,6 +69,7 @@ class Visualization(commands.Cog):
         view = embed.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
+            content="",
             embeds=embeds,
             view=view
         )
@@ -120,6 +121,7 @@ class Visualization(commands.Cog):
         view = embed.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
+            content="",
             embeds=embeds,
             view=view
         )
