@@ -179,7 +179,7 @@ class EmbedFromContent:
             )
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
-                field_title = k
+                field_title = k.title()
                 field_content = "\n".join([f"**{i + 1}.** {value}" for i, value in enumerate(v[i:i+entries_per_page])])
                 discord_embed.add_field(
                     name=field_title,
