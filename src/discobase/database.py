@@ -4,10 +4,10 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pkgutil import iter_modules
-from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Type,
-                    TypeVar)
+from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Optional,
+                    Type, TypeVar, Union)
 
 import discord
 from discord.ext import commands
@@ -23,7 +23,7 @@ from .table import Table
 __all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = str | int
+SupportsDiscoHash = Union[str, int]
 
 
 class _Record(BaseModel):
@@ -37,7 +37,7 @@ class _IndexableRecord(BaseModel):
     """Hashed value of the key."""
     record_ids: List[int]
     """Message IDs of the records that correspond to this key."""
-    next_value: _IndexableRecord | None = None
+    next_value: Optional[_IndexableRecord] = None
     """
     Temporary placeholder value for the next entry.
     Only for use in resizing.
@@ -156,7 +156,6 @@ class Database:
                 logger.info("Found metadata channel!")
                 break
 
-        logger.info("No metadata channel found, creating one.")
         return found_channel or await self.guild.create_text_channel(
             name=metadata_channel_name
         )
@@ -194,6 +193,11 @@ class Database:
         await self.build_tables()
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()
+
+        assert self._metadata_channel is not None
+        logger.info(
+            f"Invite to server: {await self._metadata_channel.create_invite()}"
+        )
 
     async def build_tables(self) -> None:
         """
@@ -337,7 +341,7 @@ class Database:
         key_name: str,
         *,
         initial_size: int = 4,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, int]:
         """
         Generate a key channel from the given information.
         This does not check if it exists.
@@ -360,8 +364,8 @@ class Database:
             f"{table}_{key_name}"
         )
         logger.debug(f"Generated key channel: {index_channel}")
-        await self._resize_hash(index_channel, initial_size)
-        return index_channel.name, index_channel.id
+        last_message_snowflake = await self._resize_hash(index_channel, initial_size)
+        return index_channel.name, index_channel.id, last_message_snowflake
 
     @staticmethod
     def _to_index(metadata: Metadata, value: int) -> int:
@@ -543,7 +547,7 @@ class Database:
                 for key_name in table.__disco_keys__
             ]
         ):
-            channel_name, channel_id = data
+            channel_name, channel_id, timestamp_snowflake = data
             index_channels[channel_name] = channel_id
 
         table_metadata = Metadata(
@@ -553,7 +557,7 @@ class Database:
             index_channels=index_channels,
             current_records=0,
             max_records=initial_size,
-            time_table={time_snowflake(datetime.now()): (0, initial_size)},
+            time_table={timestamp_snowflake: (0, initial_size)},
             message_id=0,
         )
         self._database_metadata[name] = table_metadata
@@ -604,6 +608,24 @@ class Database:
         await asyncio.gather(*coros)
         del self._database_metadata[table_name]
 
+    async def _resize_hash(
+        self,
+        index_channel: discord.TextChannel,
+        amount: int,
+    ) -> int:
+        """
+        Increases the hash for `index_channel` by amount
+
+        Args:
+            index_channel: the channel that contains index data for a database
+            amount: the amount to increase the size by
+        """
+        last_message: discord.Message | None = None
+        for _ in range(amount):
+            last_message = await index_channel.send("null")
+        last_timestamp = timedelta(seconds=1) + (last_message.created_at if last_message is not None else datetime.now())
+        return time_snowflake(last_timestamp)
+
     async def _resize_channel(
         self,
         metadata: Metadata,
@@ -623,7 +645,7 @@ class Database:
             f"Resizing channel: {channel!r} for table {metadata.name}",
         )
         old_size: int = metadata.max_records // 2
-        await self._resize_hash(channel, old_size)
+        timestamp_snowflake = await self._resize_hash(channel, old_size)
         rng = (
             old_size,
             metadata.max_records,
@@ -637,7 +659,7 @@ class Database:
             if time_range == rng:
                 del metadata.time_table[snowflake]
 
-        metadata.time_table[time_snowflake(datetime.now())] = rng
+        metadata.time_table[timestamp_snowflake] = rng
         # Now, we have to move everything into the correct position.
         #
         # Note that this shouldn't put everything into memory, as
@@ -1055,24 +1077,46 @@ class Database:
 
         return meta
 
-    async def _resize_hash(
-        self,
-        index_channel: discord.TextChannel,
-        amount: int,
-    ) -> None:
-        """
-        Increases the hash for `index_channel` by amount
-
-        Args:
-            index_channel: the channel that contains index data for a database
-            amount: the amount to increase the size by
-        """
-        for _ in range(amount):
-            await index_channel.send("null")
-
+    # This needs to be async for use in gather()
     async def _set_open(self) -> None:
-        # await self.wait_ready()
         self.open = True
+
+    async def clean(self) -> None:
+        """
+        Perform a full clean of the database.
+
+        This method erases all metadata, all entries, and all tables. After
+        calling this, a server loses any trace of the database ever being
+        there.
+
+        Note that this does *not* clean the existing tables from memory, but
+        instead just marks them all as not ready.
+
+        This action is irreversible.
+        """
+        logger.info("Cleaning the database!")
+
+        if not self._metadata_channel:
+            self._not_connected()
+
+        coros: list[Coroutine] = []
+        for table, metadata in self._database_metadata.items():
+            logger.info(f"Cleaning table {table}")
+            table_channel = self._find_channel(metadata.table_channel)
+            coros.append(table_channel.delete())
+
+            for cid in metadata.index_channels.values():
+                channel = self._find_channel(cid)
+                coros.append(channel.delete())
+
+        for schema in self.tables.values():
+            schema.__disco_ready__ = False
+
+        logger.debug(f"Gathering deletion coros: {coros}")
+        await asyncio.gather(*coros)
+        logger.info("Deleting database metadata.")
+        self._database_metadata = {}
+        await self._metadata_channel.delete()
 
     async def login(self, bot_token: str) -> None:
         """

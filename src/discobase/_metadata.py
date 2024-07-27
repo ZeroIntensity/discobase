@@ -17,7 +17,7 @@ class Metadata(BaseModel):
     max_records: int
     """Capacity of the table (i.e. the "maximum records" that is can hold)."""
     time_table: Dict[
-        int, tuple[int, int]
+        int, Tuple[int, int]
     ]  # Pydantic doesn't support range objects
     """Table of UNIX timestamp -> index range."""
     message_id: int
