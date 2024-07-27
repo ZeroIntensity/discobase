@@ -5,7 +5,7 @@ import os
 
 import discord
 from commands import bookmark_message_callback, clean_database, get_bookmarks
-from config import db
+from demobot_config import db
 
 
 class Bot(discord.Client):

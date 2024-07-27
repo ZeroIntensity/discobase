@@ -1,4 +1,4 @@
-from config import db
+from demobot_config import db
 
 import discobase
 

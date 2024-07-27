@@ -27,12 +27,10 @@ async def get(db: discobase.Database, interaction: discord.Interaction) -> tuple
     """Get bookmarks for a user, or across the whole server. If getting bookmarks for the whole sever, a search string is required.
 
     Args:
-        user (discord.User | typing.Literal["global"]): The user to get bookmarks for, or "global" to get bookmarks for the whole server.
-        mid (discord.Message.id): The message ID of the bookmarked message.
-        content (discord.Message.content): The content of the bookmarked message.
+        interaction
 
     Returns:
-        tuple[Result, list[discord.Message]]: The Result (see Result Enum), and the list of returned bookmarks
+        A tuple of bookmarked messages
     """
     return tuple(await db.tables[BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id))
 
