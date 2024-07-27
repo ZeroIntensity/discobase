@@ -100,6 +100,7 @@ class Database:
         # task
         self._setup_event = asyncio.Event()
         self._on_ready_exc: BaseException | None = None
+        self.bot.db = self
 
         # Here be dragons: https://github.com/ZeroIntensity/discobase/issues/49
         #
