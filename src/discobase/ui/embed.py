@@ -23,7 +23,7 @@ class ArrowButtons(discord.ui.View):
         self.pages = len(self.content)
         self.on_ready()
 
-    @discord.ui.button(label='⬅️', style=discord.ButtonStyle.primary, custom_id='l_button')
+    @discord.ui.button(label='⬅', style=discord.ButtonStyle.primary, custom_id='l_button')
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Controls the left button on the qotd list embed"""
         # move back a position in the embed list
@@ -43,7 +43,7 @@ class ArrowButtons(discord.ui.View):
         # update discord message
         await interaction.edit_original_response(embed=self.content[self.position], view=self)
 
-    @discord.ui.button(label='➡️️️', style=discord.ButtonStyle.primary, custom_id='r_button')
+    @discord.ui.button(label='➡', style=discord.ButtonStyle.primary, custom_id='r_button')
     async def forward(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Controls the right button on the qotd list embed"""
         # move forward a position in the embed list
