@@ -96,7 +96,7 @@ class EmbedFromContent:
         Sets the base parameters for the embeds.
 
         :param title: Title of the embed.
-        :param headers: Columns of the table, will be used for field names. Required if seeking table or schema display.
+        :param headers: Columns of the table, will be used for field names. Required if seeking table display.
         :param content: Content of the table.
         """
         self.author = "Discobase"
@@ -213,10 +213,10 @@ class EmbedFromContent:
             icon_url=self.icon_url
         )
 
-        for header in self.headers:
+        for content in self.content:
             embed.add_field(
-                name=header,
-                value=self.content["type"],
+                name=content["title"],
+                value=content["type"],
                 inline=True
             )
 
