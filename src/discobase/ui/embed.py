@@ -23,7 +23,7 @@ class ArrowButtons(discord.ui.View):
         self.pages = len(self.content)
         self.on_ready()
 
-    @discord.ui.button(label='⬅️', style=discord.ButtonStyle.primary, custom_id='l_button')
+    @discord.ui.button(label='⬅', style=discord.ButtonStyle.primary, custom_id='l_button')
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Controls the left button on the qotd list embed"""
         # move back a position in the embed list
@@ -41,9 +41,9 @@ class ArrowButtons(discord.ui.View):
             right_button.disabled = False
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.edit_original_response(embed=self.content[self.position], view=self)
 
-    @discord.ui.button(label='➡️️️', style=discord.ButtonStyle.primary, custom_id='r_button')
+    @discord.ui.button(label='➡', style=discord.ButtonStyle.primary, custom_id='r_button')
     async def forward(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Controls the right button on the qotd list embed"""
         # move forward a position in the embed list
@@ -60,7 +60,7 @@ class ArrowButtons(discord.ui.View):
             button.disabled = True
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.edit_original_response(embed=self.content[self.position], view=self)
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
@@ -79,43 +79,46 @@ class ArrowButtons(discord.ui.View):
 class EmbedStyle(StrEnum):
     COLUMN = auto()
     TABLE = auto()
+    SCHEMA = auto()
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
-# TODO change icon url to our logo
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
-    def __init__(self, title: str, content: list[str] | dict, style: "EmbedStyle", headers: list[str] | None = None) -> None:
+    def __init__(
+            self,
+            title: str,
+            content: list[str] | dict,
+            style: "EmbedStyle",
+            headers: list[str] | None = None
+    ) -> None:
         """
         Sets the base parameters for the embeds.
 
         :param title: Title of the embed.
-        :param headers: Columns of the table. Required if seeking table display.
+        :param headers: Columns of the table, will be used for field names. Required if seeking table display.
         :param content: Content of the table.
-
-        :return: list[discord.Embed]
         """
         self.author = "Discobase"
         self.color = discord.Colour.blurple()
-        self.title = title
+        self.title = title if len(title) < 256 else f"{title[0:253]}..."
         self.headers = headers
         self.content = content
         self.page_number = 0
         self.page_total = 0
         self.url = "https://github.com/ZeroIntensity/discobase"
         self.icon_url = "https://i.imgur.com/2QH3tEQ.png"
-        time = dt.now()
-        self.footer = f"page {self.page_number}/{self.page_total}//{time.strftime('%I:%M %p')} // {time.strftime(
-            '%d/%m/%Y')}"
 
         self.style = style
 
-    def create(self) -> list[discord.Embed]:
+    def create(self) -> list[discord.Embed] | discord.Embed:
         match self.style:
             case "column":
                 return self._column_display()
             case "table":
                 return self._table_display()
+            case "schema":
+                return self._schema_display()
             case _:
                 raise ValueError("Invalid style input.")
 
@@ -126,7 +129,7 @@ class EmbedFromContent:
         entries_per_page = 15
         embeds: list[discord.Embed] = []
 
-        column_data: list[str] = ["str1", "str2"]
+        column_data: list[str] = self.content
         self.page_total = round(len(column_data) / 15) + 1
 
         # Create each embed with the data
@@ -138,6 +141,7 @@ class EmbedFromContent:
                 title=self.title,
                 type='rich',
                 description=embed_content,
+                timestamp=dt.now()
             )
             discord_embed.set_author(
                 name=self.author,
@@ -145,7 +149,7 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=self.footer
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
 
             embeds.append(discord_embed)
@@ -170,6 +174,7 @@ class EmbedFromContent:
                 color=self.color,
                 title=self.title,
                 type='rich',
+                timestamp=dt.now()
             )
             discord_embed.set_author(
                 name=self.author,
@@ -177,12 +182,12 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=self.footer
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
-                field_title = k
-                field_content = "\n".join([f"{i + 1}. {value}" for i, value in enumerate(v[i:i+entries_per_page])])
+                field_title = k.title()
+                field_content = "\n".join([f"**{i + 1}.** {value}" for i, value in enumerate(v[i:i+entries_per_page])])
                 discord_embed.add_field(
                     name=field_title,
                     value=field_content,
@@ -191,3 +196,28 @@ class EmbedFromContent:
             embeds.append(discord_embed)
 
         return embeds
+
+    def _schema_display(self) -> discord.Embed:
+        """
+        Creates an embed that has the schema information. Column names as field titles, and type as field values.
+        """
+        embed = discord.Embed(
+            title=self.title,
+            color=self.color,
+            type='rich',
+            timestamp=dt.now()
+        )
+        embed.set_author(
+            name=self.author,
+            url=self.url,
+            icon_url=self.icon_url
+        )
+
+        for content in self.content:
+            embed.add_field(
+                name=content["title"],
+                value=content["type"],
+                inline=True
+            )
+
+        return embed
