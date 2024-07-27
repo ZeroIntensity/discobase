@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import timedelta
 from pkgutil import iter_modules
 from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Optional,
                     Type, TypeVar, Union)
@@ -341,7 +341,7 @@ class Database:
         key_name: str,
         *,
         initial_size: int = 4,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, int]:
         """
         Generate a key channel from the given information.
         This does not check if it exists.
@@ -364,8 +364,8 @@ class Database:
             f"{table}_{key_name}"
         )
         logger.debug(f"Generated key channel: {index_channel}")
-        await self._resize_hash(index_channel, initial_size)
-        return index_channel.name, index_channel.id
+        last_message_snowflake = await self._resize_hash(index_channel, initial_size)
+        return index_channel.name, index_channel.id, last_message_snowflake
 
     @staticmethod
     def _to_index(metadata: Metadata, value: int) -> int:
@@ -547,7 +547,7 @@ class Database:
                 for key_name in table.__disco_keys__
             ]
         ):
-            channel_name, channel_id = data
+            channel_name, channel_id, timestamp_snowflake = data
             index_channels[channel_name] = channel_id
 
         table_metadata = Metadata(
@@ -557,7 +557,7 @@ class Database:
             index_channels=index_channels,
             current_records=0,
             max_records=initial_size,
-            time_table={time_snowflake(datetime.now()): (0, initial_size)},
+            time_table={timestamp_snowflake: (0, initial_size)},
             message_id=0,
         )
         self._database_metadata[name] = table_metadata
@@ -612,7 +612,7 @@ class Database:
         self,
         index_channel: discord.TextChannel,
         amount: int,
-    ) -> None:
+    ) -> int:
         """
         Increases the hash for `index_channel` by amount
 
@@ -620,8 +620,11 @@ class Database:
             index_channel: the channel that contains index data for a database
             amount: the amount to increase the size by
         """
+        last_message: discord.Message | None = None
         for _ in range(amount):
-            await index_channel.send("null")
+            last_message = await index_channel.send("null")
+        last_timestamp = last_message.created_at + timedelta(seconds=1)
+        return time_snowflake(last_timestamp)
 
     async def _resize_channel(
         self,
@@ -642,7 +645,7 @@ class Database:
             f"Resizing channel: {channel!r} for table {metadata.name}",
         )
         old_size: int = metadata.max_records // 2
-        await self._resize_hash(channel, old_size)
+        timestamp_snowflake = await self._resize_hash(channel, old_size)
         rng = (
             old_size,
             metadata.max_records,
@@ -656,7 +659,7 @@ class Database:
             if time_range == rng:
                 del metadata.time_table[snowflake]
 
-        metadata.time_table[time_snowflake(datetime.now())] = rng
+        metadata.time_table[timestamp_snowflake] = rng
         # Now, we have to move everything into the correct position.
         #
         # Note that this shouldn't put everything into memory, as
