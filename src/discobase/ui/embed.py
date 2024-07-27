@@ -97,7 +97,7 @@ class EmbedFromContent:
         """
         self.author = "Discobase"
         self.color = discord.Colour.blurple()
-        self.title = title
+        self.title = title if len(title) < 256 else f"{title[0:253]}..."
         self.headers = headers
         self.content = content
         self.page_number = 0
