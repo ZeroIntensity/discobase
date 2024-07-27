@@ -79,20 +79,25 @@ class ArrowButtons(discord.ui.View):
 class EmbedStyle(StrEnum):
     COLUMN = auto()
     TABLE = auto()
+    SCHEMA = auto()
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
-    def __init__(self, title: str, content: list[str] | dict, style: "EmbedStyle", headers: list[str] | None = None) -> None:
+    def __init__(
+            self,
+            title: str,
+            content: list[str] | dict,
+            style: "EmbedStyle",
+            headers: list[str] | None = None
+    ) -> None:
         """
         Sets the base parameters for the embeds.
 
         :param title: Title of the embed.
-        :param headers: Columns of the table. Required if seeking table display.
+        :param headers: Columns of the table, will be used for field names. Required if seeking table or schema display.
         :param content: Content of the table.
-
-        :return: list[discord.Embed]
         """
         self.author = "Discobase"
         self.color = discord.Colour.blurple()
@@ -106,12 +111,14 @@ class EmbedFromContent:
 
         self.style = style
 
-    def create(self) -> list[discord.Embed]:
+    def create(self) -> list[discord.Embed] | discord.Embed:
         match self.style:
             case "column":
                 return self._column_display()
             case "table":
                 return self._table_display()
+            case "schema":
+                return self._schema_display()
             case _:
                 raise ValueError("Invalid style input.")
 
@@ -189,3 +196,25 @@ class EmbedFromContent:
             embeds.append(discord_embed)
 
         return embeds
+
+    def _schema_display(self) -> discord.Embed:
+        embed = discord.Embed(
+            title=self.title,
+            color=self.color,
+            type='rich',
+            timestamp=dt.now()
+        )
+        embed.set_author(
+            name=self.author,
+            url=self.url,
+            icon_url=self.icon_url
+        )
+
+        for header in self.headers:
+            embed.add_field(
+                name=header,
+                value=self.content["type"],
+                inline=True
+            )
+
+        return embed
