@@ -83,7 +83,6 @@ class EmbedStyle(StrEnum):
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
-# TODO Fix page total incorrect bug
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
     def __init__(
@@ -166,7 +165,7 @@ class EmbedFromContent:
 
         column_names: list = self.headers
         table_data: dict = self.content
-        self.page_total = round(len(self.content) / entries_per_page) + 1
+        self.page_total = round(len(self.content[self.headers[0]]) / entries_per_page) + 1
 
         # get the len of the first column's data
         for i in range(0, len(table_data[column_names[0]]), entries_per_page):
