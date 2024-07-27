@@ -82,7 +82,6 @@ class EmbedStyle(StrEnum):
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
-# TODO add numbered records for tables
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
     def __init__(self, title: str, content: list[str] | dict, style: "EmbedStyle", headers: list[str] | None = None) -> None:
@@ -181,7 +180,7 @@ class EmbedFromContent:
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
                 field_title = k
-                field_content = "\n".join([f"{i + 1}. {value}" for i, value in enumerate(v[i:i+entries_per_page])])
+                field_content = "\n".join([f"**{i + 1}.** {value}" for i, value in enumerate(v[i:i+entries_per_page])])
                 discord_embed.add_field(
                     name=field_title,
                     value=field_content,
