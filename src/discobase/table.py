@@ -8,7 +8,8 @@ from typing_extensions import Self
 if TYPE_CHECKING:
     from .database import Database
 
-from .exceptions import DatabaseTableError, NotConnectedError
+from .exceptions import (DatabaseStorageError, DatabaseTableError,
+                         NotConnectedError)
 
 __all__ = ("Table",)
 
@@ -24,6 +25,8 @@ class Table(BaseModel):
     """Internal name of the table. Set by the `table()` decorator."""
     __disco_ready__: ClassVar[bool] = False
     """Whether the `Table` object has it's database channels set up."""
+    __disco_id__: int = -1
+    """Message ID of the record. This is only present if it was saved."""
 
     @classmethod
     def _ensure_db(cls) -> None:
@@ -62,8 +65,14 @@ class Table(BaseModel):
             ```
         """
         self._ensure_db()
+        if self.__disco_id__ != -1:
+            raise DatabaseStorageError(
+                "this instance has already been saved, you should call update() instead"  # noqa
+            )
+
         assert self.__disco_database__
-        await self.__disco_database__._add_record(self)
+        msg = await self.__disco_database__._add_record(self)
+        self.__disco_id__ = msg.id
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:

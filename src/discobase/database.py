@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pkgutil import iter_modules
@@ -13,17 +14,44 @@ import discord
 from discord.ext import commands
 from discord.utils import snowflake_time, time_snowflake
 from loguru import logger
-from pydantic import BaseModel, ValidationError
+from pydantic import (BaseModel, ValidationError, ValidationInfo,
+                      ValidatorFunctionWrapHandler, WrapValidator)
+from typing_extensions import Annotated
 
 from ._metadata import Metadata
 from .exceptions import (DatabaseCorruptionError, DatabaseStorageError,
                          DatabaseTableError, NotConnectedError)
 from .table import Table
 
-__all__ = ("Database",)
+__all__ = ("Database", "References")
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = Union[str, int]
+SupportsDiscoHash = Union[str, int, Iterable["SupportsDiscoHash"]]
+
+
+def _validate_ref(
+    value: Any,
+    handler: ValidatorFunctionWrapHandler,
+    info: ValidationInfo,
+) -> int:
+    print(info.mode, repr(value), info)
+    if info.mode == "json":
+        if not isinstance(value, int):
+            raise DatabaseCorruptionError("a")
+        return handler(value)
+
+    if not isinstance(value, Table):
+        raise DatabaseCorruptionError("b")
+
+    if value.__disco_id__ == -1:
+        raise DatabaseStorageError(
+            f"cannot store {value!r} as a reference, since it is not in the database"  # noqa
+        )
+
+    return value.__disco_id__
+
+
+References = Annotated[T, WrapValidator(_validate_ref)]
 
 
 class _Record(BaseModel):
@@ -400,7 +428,7 @@ class Database:
             An integer, positive or negative, representing the unique hash.
             This is always the same thing across programs.
         """
-        logger.debug(f"Hashing: {value!r}")
+        logger.debug(f"Hashing object: {value!r}")
         if isinstance(value, str):
             hashed_str = int(
                 hashlib.sha1(value.encode("utf-8")).hexdigest(),
@@ -408,20 +436,37 @@ class Database:
             )
             logger.debug(f"Hashed string {value!r} into {hashed_str}")
             return hashed_str
+        elif isinstance(value, Iterable):
+
+            # This is a bit hacky, but this lets us support any
+            # iterable object.
+            class _Transport:
+                def __init__(self, hash_num: int) -> None:
+                    self.hash_num = hash_num
+
+                def __hash__(self) -> int:
+                    return self.hash_num
+
+            hashes: list[_Transport] = []
+            for item in value:
+                hashes.append(_Transport(self._hash(item)))
+
+            return hash(tuple(hashes))
         elif isinstance(value, int):
             return value
-        elif isinstance(value, list):
-            raise NotImplementedError
-        elif isinstance(value, tuple):
-            raise NotImplementedError
         elif isinstance(value, dict):
             raise NotImplementedError
         else:
             raise DatabaseStorageError(f"unhashable: {value!r}")
 
     def _as_hashed(
-        self, metadata: Metadata, value: SupportsDiscoHash
+        self,
+        metadata: Metadata,
+        value: SupportsDiscoHash,
     ) -> tuple[int, int]:
+        """
+        Get the hash number and index for `value`.
+        """
         hashed = self._hash(value)
         return hashed, self._to_index(metadata, hashed)
 
@@ -774,6 +819,12 @@ class Database:
             await msg.edit(content=content)
 
     async def _resize_table(self, metadata: Metadata) -> None:
+        """
+        Resize all the index channels in a table.
+
+        Args:
+            metadata: Metadata for the entire table.
+        """
         if not self._metadata_channel:
             self._not_connected()
 
@@ -920,7 +971,8 @@ class Database:
 
                 index_channel: discord.TextChannel = self._find_channel(cid)
                 hashed_field, target_index = self._as_hashed(
-                    table_metadata, value
+                    table_metadata,
+                    value,
                 )
                 await self._write_index_record(
                     index_channel,
@@ -987,6 +1039,7 @@ class Database:
                     continue
 
                 if serialized_content.key == hashed_field:
+                    logger.debug(f"Key matches hash! {serialized_content}")
                     sets_list.append(set(serialized_content.record_ids))
                 else:
                     # Hash collision!
@@ -1008,6 +1061,7 @@ class Database:
                     )
 
                     rec = _IndexableRecord.from_message(entry.content)
+                    logger.debug(f"Found hash collision index entry: {rec}")
                     if not rec:
                         # This shouldn't be possible, considering the
                         # search function explicitly disallows that.
@@ -1019,18 +1073,10 @@ class Database:
 
         if not query:
             logger.info("Query is empty, finding all entries!")
-            for name, cid in table_metadata.index_channels.items():
-                channel = self._find_channel(cid)
-                async for msg in channel.history(limit=None):
-                    logger.debug(f"Dealing with message in channel: {msg}")
-                    rec = _IndexableRecord.from_message(msg.content)
-                    if not rec:
-                        continue
-
-                    logger.debug(
-                        f"Appended to sets_list: {', '.join([str(i) for i in rec.record_ids])}"  # noqa
-                    )
-                    sets_list.append(set(rec.record_ids))
+            channel = self._find_channel(table_metadata.table_channel)
+            async for msg in channel.history(limit=None):
+                logger.debug(f"Found message in channel: {msg}")
+                sets_list.append({msg.id})
 
         main_table = await self.guild.fetch_channel(
             table_metadata.table_channel
@@ -1040,17 +1086,18 @@ class Database:
                 f"expected {main_table!r} to be a TextChannel"
             )
 
+        logger.debug(f"Got IDs: {sets_list}")
         table = self.tables[table_name]
-        records = []
+        records: list[Table] = []
         for record_ids in sets_list:
             for record_id in record_ids:
                 message = await main_table.fetch_message(record_id)
                 record = _Record.model_validate_json(message.content)
-                records.append(
-                    table.model_validate_json(
-                        urlsafe_b64decode(record.content),
-                    )
+                entry = table.model_validate_json(
+                    urlsafe_b64decode(record.content),
                 )
+                entry.__disco_id__ = message.id
+                records.append(entry)
 
         return records
 
@@ -1259,6 +1306,11 @@ class Database:
         clas.__disco_name__ = clas.__name__.lower()
         if clas.__disco_name__ in self.tables:
             raise DatabaseTableError(f"table {clas.__name__} already exists")
+
+        if clas.__disco_database__ is not None:
+            raise DatabaseTableError(
+                f"{clas!r} can only be attached to one database"
+            )
 
         # Some implementation information.
         # __disco_database__ stores a reference to the database object, to
