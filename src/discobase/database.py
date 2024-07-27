@@ -81,6 +81,7 @@ class Database:
         # We need to keep a strong reference to the free-flying
         # task
         self._setup_event = asyncio.Event()
+        self._internal_setup_event = asyncio.Event()
         self._on_ready_exc: BaseException | None = None
 
         # Here be dragons: https://github.com/ZeroIntensity/discobase/issues/49
@@ -145,8 +146,17 @@ class Database:
 
     # This needs to be async for use in gather()
     async def _set_open(self) -> None:
-        await self.wait_ready()
+        logger.debug("_set_open waiting on internal setup event")
+        await self._internal_setup_event.wait()
+        logger.debug(
+            "Internal setup event dispatched! Database has been marked as open."  # noqa
+        )
         self.open = True
+        # See https://github.com/ZeroIntensity/discobase/issues/68
+        #
+        # If `wait_ready()` is never called, then the error does not propagate.
+        if self._on_ready_exc:
+            raise self._on_ready_exc
 
     async def init(self) -> None:
         """
@@ -178,6 +188,8 @@ class Database:
             logger.info("Found an existing guild.")
             self.guild = found_guild
 
+        # Unlock database, but don't wakeup the user.
+        self._internal_setup_event.set()
         await self.build_tables()
         # At this point, the database is marked as "ready" to the user.
         self._setup_event.set()

@@ -75,6 +75,19 @@ class _IndexableRecord(BaseModel):
             ) from e
 
 
+class _HashTransport:
+    """
+    Hacky object to use `hash()` for tuples and dictionaries
+    that retains the value between interpreters.
+    """
+
+    def __init__(self, hash_num: int) -> None:
+        self.hash_num = hash_num
+
+    def __hash__(self) -> int:
+        return self.hash_num
+
+
 class TableCursor:
     def __init__(
         self,
@@ -204,26 +217,27 @@ class TableCursor:
             )
             logger.debug(f"Hashed string {value!r} into {hashed_str}")
             return hashed_str
+        elif isinstance(value, dict):
+            transport: dict[_HashTransport, _HashTransport] = {}
+
+            for k, v in value.items():
+                transport[_HashTransport(self._hash(k))] = _HashTransport(
+                    self._hash(v)
+                )
+
+            hashed_dict = hash(transport)
+            logger.debug(f"Hashed dictionary {value!r} into {hashed_dict}")
+            return hashed_dict
         elif isinstance(value, Iterable):
-
-            # This is a bit hacky, but this lets us support any
-            # iterable object.
-            class _Transport:
-                def __init__(self, hash_num: int) -> None:
-                    self.hash_num = hash_num
-
-                def __hash__(self) -> int:
-                    return self.hash_num
-
-            hashes: list[_Transport] = []
+            hashes: list[_HashTransport] = []
             for item in value:
-                hashes.append(_Transport(self._hash(item)))
+                hashes.append(_HashTransport(self._hash(item)))
 
-            return hash(tuple(hashes))
+            hashed_tuple = hash(tuple(hashes))
+            logger.debug(f"Hashed iterable {value!r} into {hashed_tuple}")
+            return hashed_tuple
         elif isinstance(value, int):
             return value
-        elif isinstance(value, dict):
-            raise NotImplementedError
         else:
             raise DatabaseStorageError(f"unhashable: {value!r}")
 
@@ -568,18 +582,17 @@ class TableCursor:
         message = await main_table.send(record_data.model_dump_json())
 
         for field, value in record.model_dump().items():
-            for name, cid in metadata.index_channels.items():
-                if name.lower().split("_", maxsplit=1)[1] != field.lower():
-                    continue
-
-                index_channel: discord.TextChannel = self._find_channel(cid)
-                hashed_field, target_index = self._as_hashed(value)
-                await self._write_index_record(
-                    index_channel,
-                    target_index,
-                    hashed_field,
-                    message.id,
-                )
+            channel = self._find_channel(
+                metadata.index_channels[f"{record.__disco_name__}_{field}"]
+            )
+            # TODO: Use gather here
+            hashed_field, target_index = self._as_hashed(value)
+            await self._write_index_record(
+                channel,
+                target_index,
+                hashed_field,
+                message.id,
+            )
 
         return await message.edit(content=record_data.model_dump_json())
 
@@ -645,6 +658,7 @@ class TableCursor:
             if not len(old_record.record_ids):
                 # We can nullify this entry
                 await old_msg.edit(content="null")
+                self.metadata.current_records -= 1
             else:
                 # There are other entries with this value, only remove this ID
                 old_record.record_ids.remove(msg.id)
@@ -764,7 +778,7 @@ class TableCursor:
         Args:
             table: Processed channel name of the table.
             key_name: Name of the key, per `__disco_keys__`.
-            initial_size: Equivalent to `initial_size` in `_create_table`.
+            initial_size: Equivalent to `initial_size` in `create_table`.
 
         Returns:
             Tuple containing the channel name
@@ -847,13 +861,12 @@ class TableCursor:
         # The primary table holds the actual records
         primary_table = await guild.create_text_channel(name)
         logger.debug(f"Generated primary table: {primary_table!r}")
-        index_channels: dict[str, int] = {}
 
         metadata = Metadata(
             name=name,
             keys=tuple(table.__disco_keys__),
             table_channel=primary_table.id,
-            index_channels=index_channels,
+            index_channels={},
             current_records=0,
             max_records=initial_size,
             time_table={time_snowflake(datetime.now()): (0, initial_size)},
@@ -861,6 +874,7 @@ class TableCursor:
         )
         self = TableCursor(metadata, metadata_channel, guild)
 
+        index_channels: dict[str, int] = {}
         # This is ugly, but this is fast: we generate
         # the key channels in parallel.
         for data in await asyncio.gather(
@@ -876,6 +890,7 @@ class TableCursor:
             channel_name, channel_id = data
             index_channels[channel_name] = channel_id
 
+        metadata.index_channels = index_channels
         message = await self.metadata_channel.send(metadata.model_dump_json())
 
         table.__disco_cursor__ = self
