@@ -88,7 +88,6 @@ class Visualization(commands.Cog):
             f"Searching for table `{table.name}`..."
         )
         try:
-            logger.debug("Finding table")
             col_table = self.db.tables[table.name]
             await interaction.edit_original_response(
                 content=f"Table `{col_table.__disco_name__}` found! Gathering data..."
@@ -101,9 +100,8 @@ class Visualization(commands.Cog):
             return
 
         try:
-            logger.debug("Finding column")
             column = [col for col in col_table.__disco_keys__ if col == name][0]
-        except IndexError:
+        except (IndexError, ValueError):
             await interaction.edit_original_response(
                 content=f"The column `{name}` does not exist in the table `{col_table.__disco_name__}`."
             )
