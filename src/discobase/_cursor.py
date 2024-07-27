@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import timedelta
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
@@ -301,7 +301,7 @@ class TableCursor:
         self,
         index_channel: discord.TextChannel,
         amount: int,
-    ) -> None:
+    ) -> int:
         """
         Increases the hash for `index_channel` by amount
 
@@ -309,8 +309,14 @@ class TableCursor:
             index_channel: the channel that contains index data for a database
             amount: the amount to increase the size by
         """
+        last_message: discord.Message | None = None
         for _ in range(amount):
-            await index_channel.send("null")
+            last_message = await index_channel.send("null")
+
+        if not last_message:
+            raise DatabaseCorruptionError("last_message is None somehow")
+        last_timestamp = timedelta(seconds=1) + last_message.created_at
+        return time_snowflake(last_timestamp)
 
     async def _resize_channel(
         self,
@@ -330,7 +336,7 @@ class TableCursor:
             f"Resizing channel: {channel!r} for table {metadata.name}",
         )
         old_size: int = metadata.max_records // 2
-        await self._resize_hash(channel, old_size)
+        timestamp_snowflake = await self._resize_hash(channel, old_size)
         rng = (
             old_size,
             metadata.max_records,
@@ -344,7 +350,7 @@ class TableCursor:
             if time_range == rng:
                 del metadata.time_table[snowflake]
 
-        metadata.time_table[time_snowflake(datetime.now())] = rng
+        metadata.time_table[timestamp_snowflake] = rng
         # Now, we have to move everything into the correct position.
         #
         # Note that this shouldn't put everything into memory, as
@@ -770,7 +776,7 @@ class TableCursor:
         key_name: str,
         *,
         initial_size: int = 4,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, int]:
         """
         Generate a key channel from the given information.
         This does not check if it exists.
@@ -790,8 +796,10 @@ class TableCursor:
             f"{table}_{key_name}"
         )
         logger.debug(f"Generated key channel: {index_channel}")
-        await self._resize_hash(index_channel, initial_size)
-        return index_channel.name, index_channel.id
+        last_message_snowflake = await self._resize_hash(
+            index_channel, initial_size
+        )
+        return index_channel.name, index_channel.id, last_message_snowflake
 
     @classmethod
     async def create_table(
@@ -869,10 +877,11 @@ class TableCursor:
             index_channels={},
             current_records=0,
             max_records=initial_size,
-            time_table={time_snowflake(datetime.now()): (0, initial_size)},
+            time_table={},
             message_id=0,
         )
         self = TableCursor(metadata, metadata_channel, guild)
+        timestamp_snowflake: int | None = None
 
         index_channels: dict[str, int] = {}
         # This is ugly, but this is fast: we generate
@@ -887,9 +896,11 @@ class TableCursor:
                 for key_name in table.__disco_keys__
             ]
         ):
-            channel_name, channel_id = data
+            channel_name, channel_id, timestamp_snowflake = data
             index_channels[channel_name] = channel_id
 
+        assert timestamp_snowflake is not None
+        metadata.time_table = {timestamp_snowflake: (0, initial_size)}
         metadata.index_channels = index_channels
         message = await self.metadata_channel.send(metadata.model_dump_json())
 
