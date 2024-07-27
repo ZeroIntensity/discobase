@@ -28,7 +28,7 @@ class Visualization(commands.Cog):
             f"Searching for table `{name}`..."
         )
         try:
-            table = self.db._tables[name]
+            table = self.db.tables[name]
             await interaction.edit_original_response(
                 content=f"Table `{name}` found! Gathering data..."
             )
@@ -95,7 +95,7 @@ class Visualization(commands.Cog):
             f"Searching for table `{table.name}`..."
         )
         try:
-            col_table = self.db._tables[table.name]
+            col_table = self.db.tables[table.name]
             await interaction.edit_original_response(
                 content=f"Table `{col_table.__disco_name__}` found! Gathering data..."
             )
@@ -147,7 +147,25 @@ class Visualization(commands.Cog):
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
-        pass
+        table_info: list | None = None
+        table_schema: dict | None = None
+        schemas: list[dict] | None = None
+
+        if table.name in self.bot.db.tables:
+            table_info = self.bot.db.tables[table.name]
+            table_schema = table_info.model_json_schema()
+            schemas = [table_schema["properties"][disco_key] for disco_key in table_info.__disco_keys__]
+
+            embed = discord.Embed(title=table.name)
+
+            for schema in schemas:
+                embed.add_field(name=schema["title"], value=schema["type"])
+
+            interaction.response.send_message(embed=embed)
+        else:
+            interaction.response.send_message(
+                "There is no table with that name, try creating a table."
+            )
 
 
 async def setup(bot: commands.Bot) -> None:
