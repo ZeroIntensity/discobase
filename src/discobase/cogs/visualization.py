@@ -54,12 +54,9 @@ class Visualization(commands.Cog):
         table_values = await table.find()
         logger.info(table_values)
 
-        try:
-            for game in table_values:
-                for col in table_columns:
-                    data[col].append(getattr(game, col))
-        except Exception as e:
-            logger.exception(e)
+        for game in table_values:
+            for col in table_columns:
+                data[col].append(getattr(game, col))
 
         embed_from_content = embed.EmbedFromContent(
             title=f"Table: {table.__disco_name__.title()}",
