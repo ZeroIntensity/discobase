@@ -140,26 +140,7 @@ class Visualization(commands.Cog):
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
-
-        table_info: list | None = None
-        table_schema: dict | None = None
-        schemas: list[dict] | None = None
-
-        if table.name in self.bot.db.tables:
-            table_info = self.bot.db.tables[table.name]
-            table_schema = table_info.model_json_schema()
-            schemas = [table_schema["properties"][disco_key] for disco_key in table_info.__disco_keys__]
-
-            embed = discord.Embed(title=table.name)
-
-            for schema in schemas:
-                embed.add_field(name=schema["title"], value=schema["type"])
-
-            await interaction.response.send_message(embed=embed)
-        else:
-            await interaction.response.send_message(
-                "There is no table with that name, try creating a table."
-            )
+        pass
 
 
 async def setup(bot: commands.Bot) -> None:
