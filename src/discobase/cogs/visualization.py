@@ -45,7 +45,6 @@ class Visualization(commands.Cog):
             )
             return
 
-        logger.debug("Getting table columns")
         table_columns = [col.title() for col in table.__disco_keys__]  # convert set to list to enable subscripting
 
         data: dict[str:list] = {}
@@ -85,34 +84,37 @@ class Visualization(commands.Cog):
         table: discord.TextChannel,
         name: str,
     ) -> None:
-        pass
         await interaction.response.send_message(
             f"Searching for table `{table.name}`..."
         )
         try:
+            logger.debug("Finding table")
             col_table = self.db.tables[table.name]
             await interaction.edit_original_response(
                 content=f"Table `{col_table.__disco_name__}` found! Gathering data..."
             )
-        except IndexError:
+        except IndexError as e:
+            logger.error(e)
             await interaction.edit_original_response(
                 content=f"The table `{table.name}` does not exist."
             )
             return
 
         try:
-            table_column = getattr(col_table.__disco_keys__, name)
-        except AttributeError:
+            logger.debug("Finding column")
+            column = [col for col in col_table.__disco_keys__ if col == name][0]
+        except IndexError:
             await interaction.edit_original_response(
                 content=f"The column `{name}` does not exist in the table `{col_table.__disco_name__}`."
             )
             return
 
-        data = [table_column]
+        table_records = await col_table.find()
+        column_values = [getattr(record, column) for record in table_records]
 
         embeds = embed.EmbedFromContent(
-            title=f"Column `{name.title()}` From Table `{col_table.__disco_name__.title()}`",
-            content=data,
+            title=f"Column `{name.title()}` from Table `{col_table.__disco_name__.title()}`",
+            content=column_values,
             headers=None,
             style=embed.EmbedStyle.COLUMN
         ).create()
