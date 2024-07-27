@@ -90,7 +90,7 @@ class Visualization(commands.Cog):
         try:
             col_table = self.db.tables[table.name]
             await interaction.edit_original_response(
-                content=f"Table `{col_table.__disco_name__}` found! Gathering data..."
+                content=f"Table `{col_table.__disco_name__}` found! Gathering column data..."
             )
         except IndexError as e:
             logger.error(e)
