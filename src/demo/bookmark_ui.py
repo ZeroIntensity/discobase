@@ -3,7 +3,7 @@ import discord
 
 
 async def dm_bookmark(user: discord.User | discord.Member, message: discord.Message, title: str):
-    embed = build_bookmark_embed(tuple(title, message))
+    embed = build_bookmark_embed((title, message))
     await user.send(content="Successfully bookmarked the message", embed=embed)
 
 class BookmarkForm(discord.ui.Modal):
@@ -26,7 +26,7 @@ class BookmarkForm(discord.ui.Modal):
         """Sends the bookmark embed to the user with the newly chosen title."""
         title = self.bookmark_title.value or self.bookmark_title.default
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
             await dm_bookmark(interaction.user, self.message, title)
             await db_interactions.add(interaction, self.message, title)
         except discord.Forbidden:
@@ -37,7 +37,8 @@ class BookmarkForm(discord.ui.Modal):
             return
         except Exception as e:
             await interaction.followup.send(
-                embed=(build_error_embed(f"{e.__class__.__name}: {e}"))
+                embed=build_error_embed(f"{e.__class__.__name__}: {e}"),
+                ephemeral=True
             )
 
 
@@ -59,7 +60,7 @@ def build_embeds_list(records: list[tuple[str, discord.Message]]) -> list[discor
 
 def build_error_embed(embed_content: str):
     embed = discord.Embed(title="Error Saving embed", description=embed_content)
-    embed.set_author("Bookmark Bot")
+    embed.set_author(name="Bookmark Bot")
     return embed
 
 
