@@ -16,14 +16,12 @@ async def add(interaction: discord.Interaction, message: discord.Message, title:
     record = BookmarkedMessage(
         user_id=interaction.user.id,
         title=title,
-        content=message.clean_content,
-        author_id=message.author.id,
         channel_id=message.channel.id,
         message_id=message.id
     )
     await record.save()
 
-async def get(db: discobase.Database, interaction: discord.Interaction) -> tuple[BookmarkedMessage]:
+async def get(channel_bot: discord.Client, db: discobase.Database, interaction: discord.Interaction) -> list[tuple[str, discord.Message]]:
     """Get bookmarks for a user, or across the whole server. If getting bookmarks for the whole sever, a search string is required.
 
     Args:
@@ -32,7 +30,14 @@ async def get(db: discobase.Database, interaction: discord.Interaction) -> tuple
     Returns:
         A tuple of bookmarked messages
     """
-    return tuple(await db.tables[BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id))
+    records = await db.tables[BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id)
+
+    return_data = []
+    for record in records:
+        channel = await channel_bot.fetch_channel(record.channel_id)
+        message = await channel.fetch_message(record.message_id)
+        return_data.append((record.title, message))
+    return return_data
 
 async def remove(db: discobase.Database, user: discord.User, mid: discord.Message.id):
     """Remove a bookmark from the list.
