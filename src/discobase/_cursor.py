@@ -5,6 +5,7 @@ import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Iterable
 from datetime import datetime
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import discord
@@ -17,6 +18,8 @@ from .exceptions import DatabaseCorruptionError, DatabaseStorageError
 
 if TYPE_CHECKING:
     from .table import Table
+
+__all__ = ("TableCursor",)
 
 
 class _Record(BaseModel):
@@ -83,6 +86,7 @@ class TableCursor:
         self.metadata_channel = metadata_channel
         self.guild = guild
 
+    @lru_cache
     def _find_channel(self, channel_id: int) -> discord.TextChannel:
         for channel in self.guild.channels:
             if channel.id != channel_id:
@@ -112,7 +116,6 @@ class TableCursor:
 
         Args:
             channel: Index channel to search.
-            metadata: Metadata for the whole table.
             index: The index to start at.
             search_func: Function to check if the message content is good.
         """
@@ -168,7 +171,6 @@ class TableCursor:
         on the metadata's `max_records`.
 
         Args:
-            metadata: Metadata object for the channel.
             value: Integer hash, positive or negative.
 
         Returns:
@@ -446,9 +448,6 @@ class TableCursor:
     async def _resize_table(self) -> None:
         """
         Resize all the index channels in a table.
-
-        Args:
-            metadata: Metadata for the entire table.
         """
         metadata = self.metadata
         metadata.max_records *= 2
