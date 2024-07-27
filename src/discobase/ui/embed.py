@@ -41,7 +41,7 @@ class ArrowButtons(discord.ui.View):
             right_button.disabled = False
 
         # update discord message
-        await interaction.edit_original_response(embed=self.content[self.position], view=self)
+        await interaction.response.edit_message(embed=self.content[self.position], view=self)
 
     @discord.ui.button(label='➡', style=discord.ButtonStyle.primary, custom_id='r_button')
     async def forward(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -60,7 +60,7 @@ class ArrowButtons(discord.ui.View):
             button.disabled = True
 
         # update discord message
-        await interaction.edit_original_response(embed=self.content[self.position], view=self)
+        await interaction.response.edit_message(embed=self.content[self.position], view=self)
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
@@ -83,6 +83,7 @@ class EmbedStyle(StrEnum):
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
+# TODO Fix page total incorrect bug
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
     def __init__(
