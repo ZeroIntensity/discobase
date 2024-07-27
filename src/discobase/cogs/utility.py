@@ -3,6 +3,8 @@ import json
 import discord
 from discord import app_commands
 from discord.ext import commands
+from loguru import logger
+from pydantic import ValidationError
 
 
 class Utility(commands.Cog):
@@ -13,6 +15,10 @@ class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.db = self.bot.db
+
+    @app_commands.command(name="hello")
+    async def hello(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"hello {interaction.user}!")
 
     @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
@@ -25,35 +31,51 @@ class Utility(commands.Cog):
         table: discord.TextChannel,
         data: str,
     ) -> None:
-        table_name = table.name.replace("-", " ")
-        try:
-            table = self.db._tables[table_name]  # Table object
-        except IndexError:
-            await interaction.response.send_message(f"The table '{table_name}' does not exist.")
-            return
+        logger.info("Called 'insert' command.")
+        await interaction.response.send_message(f"Looking for {table.name}...")
 
-        # Get columns and values in data variable; json format or | separators?
-        data_dict: dict = json.loads(data)
+        table_name = table.name.replace("-", " ").lower()
 
-        # Check if column name exists
-        # If it does then insert the data into it
-        # for k, v in data_dict.items():
-        #     if table.hasattr(k):
-        #         table.k = v
         try:
-            new_entry = table(**data_dict)
-        except TypeError:
-            await interaction.response.send_message(
-                f"The keys in your data did not match the column names for {table_name}."
+            table_obj = self.db.tables[table_name]  # Table object
+        except IndexError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"The table '{table_name}' does not exist."
             )
             return
 
-        # save db
-        new_entry.save()
+        # Get columns and values in data variable; json format or | separators?
+        try:
+            data_dict: dict = json.loads(data)
+        except TypeError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"The data you entered was not in json format.\nEntered data: {data}"
+            )
+            return
 
-        await interaction.response.send_message(
-            f"I have inserted `{data}` into `{table}` table."
-        )
+        try:
+            logger.info("Adding new data to table")
+            new_entry = table_obj(**data_dict)
+        except ValidationError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"You are missing one of the following columns in your data: {table_obj.__disco_keys__}."
+            )
+            return
+
+        try:
+            await new_entry.save()
+        except Exception as e:
+            logger.error(e)
+
+        try:
+            await interaction.edit_original_response(
+                content=f"I have inserted `{data}` into `{table_name}` table."
+            )
+        except Exception as e:
+            logger.error(e)
 
     @app_commands.command(description="Modifies a record with a new value.")
     @app_commands.describe(
