@@ -41,7 +41,7 @@ class ArrowButtons(discord.ui.View):
             right_button.disabled = False
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.edit_original_response(embed=self.content[self.position], view=self)
 
     @discord.ui.button(label='➡️️️', style=discord.ButtonStyle.primary, custom_id='r_button')
     async def forward(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -60,7 +60,7 @@ class ArrowButtons(discord.ui.View):
             button.disabled = True
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.edit_original_response(embed=self.content[self.position], view=self)
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
@@ -82,7 +82,8 @@ class EmbedStyle(StrEnum):
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
-# TODO change icon url to our logo
+# TODO add numbered records for tables
+
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
     def __init__(self, title: str, content: list[str] | dict, style: "EmbedStyle", headers: list[str] | None = None) -> None:
@@ -104,9 +105,6 @@ class EmbedFromContent:
         self.page_total = 0
         self.url = "https://github.com/ZeroIntensity/discobase"
         self.icon_url = "https://i.imgur.com/2QH3tEQ.png"
-        time = dt.now()
-        self.footer = f"page {self.page_number}/{self.page_total}//{time.strftime('%I:%M %p')} // {time.strftime(
-            '%d/%m/%Y')}"
 
         self.style = style
 
@@ -126,7 +124,7 @@ class EmbedFromContent:
         entries_per_page = 15
         embeds: list[discord.Embed] = []
 
-        column_data: list[str] = ["str1", "str2"]
+        column_data: list[str] = self.content
         self.page_total = round(len(column_data) / 15) + 1
 
         # Create each embed with the data
@@ -138,6 +136,7 @@ class EmbedFromContent:
                 title=self.title,
                 type='rich',
                 description=embed_content,
+                timestamp=dt.now()
             )
             discord_embed.set_author(
                 name=self.author,
@@ -145,7 +144,7 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=self.footer
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
 
             embeds.append(discord_embed)
@@ -170,6 +169,7 @@ class EmbedFromContent:
                 color=self.color,
                 title=self.title,
                 type='rich',
+                timestamp=dt.now()
             )
             discord_embed.set_author(
                 name=self.author,
@@ -177,7 +177,7 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=self.footer
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
