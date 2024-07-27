@@ -5,7 +5,8 @@ from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 
-from ..ui.embed import ArrowButtons, EmbedFromContent, EmbedStyle
+if __name__ == "__main__":
+    from ..ui.embed import ArrowButtons, EmbedFromContent, EmbedStyle
 
 
 class Visualization(commands.Cog):
@@ -22,10 +23,10 @@ class Visualization(commands.Cog):
     async def table(
         self,
         interaction: discord.Interaction,
-        name: discord.TextChannel,
+        name: discord.TextChannel
     ) -> None:
         await interaction.response.send_message(
-            f"Searching for table `{name}`..."
+            content=f"Searching for table `{name}`..."
         )
         try:
             table = self.db.tables[name]
@@ -91,6 +92,7 @@ class Visualization(commands.Cog):
         table: discord.TextChannel,
         name: str,
     ) -> None:
+        pass
         await interaction.response.send_message(
             f"Searching for table `{table.name}`..."
         )
@@ -129,24 +131,23 @@ class Visualization(commands.Cog):
             view=view
         )
 
-    @app_commands.command()
+    @app_commands.command(description="Displays general statistics for the selected table.")
     @app_commands.describe(
-        description="Displays general statistics for the selected table.",
-        channel="Choose the table you want to fetch statistics from.",
+        channel="Choose the table you want to fetch statistics from."
     )
     async def status(
         self, interaction: discord.Interaction, channel: discord.TextChannel
     ) -> None:
         pass
 
-    @app_commands.command()
+    @app_commands.command(description="Retrieves and displays the schema for the table.")
     @app_commands.describe(
-        description="Retrieves and displays the schema for the table.",
-        table="Choose the table you want to retrieve the schema from.",
+        table="Choose the table you want to retrieve the schema from."
     )
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
+
         table_info: list | None = None
         table_schema: dict | None = None
         schemas: list[dict] | None = None
@@ -161,9 +162,9 @@ class Visualization(commands.Cog):
             for schema in schemas:
                 embed.add_field(name=schema["title"], value=schema["type"])
 
-            interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
         else:
-            interaction.response.send_message(
+            await interaction.response.send_message(
                 "There is no table with that name, try creating a table."
             )
 
