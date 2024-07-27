@@ -44,6 +44,7 @@ class Visualization(commands.Cog):
             table_columns = table.__disco_keys__
         except Exception as e:
             logger.error(e)
+            return
 
         data: dict[str, Any] = {}
 
@@ -53,6 +54,7 @@ class Visualization(commands.Cog):
                 data[col] = getattr(table, col)
         except Exception as e:
             logger.error(e)
+            return
 
         try:
             logger.debug("Making embeds")
@@ -64,12 +66,14 @@ class Visualization(commands.Cog):
             ).create()
         except Exception as e:
             logger.error(e)
+            return
 
         try:
             logger.debug("Making view")
             view = ArrowButtons(content=embeds)
         except Exception as e:
             logger.error(e)
+            return
 
         await interaction.edit_original_response(
             embeds=embeds,
