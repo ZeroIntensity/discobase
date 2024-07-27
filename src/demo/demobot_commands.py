@@ -5,7 +5,6 @@ from demobot_config import db
 from discord.ext import commands
 
 
-@discord.app_commands.guild_only()
 class Bookmark(commands.Cog):
     def __init__(self, bot: commands.Bot):
         super().__init__()
