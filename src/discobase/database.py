@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pkgutil import iter_modules
 from typing import (Any, Callable, Coroutine, Dict, List, NoReturn, Optional,
                     Type, TypeVar, Union)
@@ -623,7 +623,7 @@ class Database:
         last_message: discord.Message | None = None
         for _ in range(amount):
             last_message = await index_channel.send("null")
-        last_timestamp = last_message.created_at + timedelta(seconds=1)
+        last_timestamp = timedelta(seconds=1) + (last_message.created_at if last_message is not None else datetime.now())
         return time_snowflake(last_timestamp)
 
     async def _resize_channel(
