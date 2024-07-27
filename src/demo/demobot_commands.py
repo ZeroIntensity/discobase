@@ -25,7 +25,7 @@ class Bookmark(discord.app_commands.Group):
         else:
             embeds = bookmark_ui.build_embeds_list(records)
             buttons = bookmark_ui.ArrowButtons(content = embeds)
-            await interaction.followup.send(view=buttons, embeds=embeds, ephemeral=True)
+            await interaction.followup.send(view=buttons, embed=embeds[0], ephemeral=True)
 
     @discord.app_commands.command(name="clean_database")
     async def clean_database(self, interaction: discord.Interaction):
