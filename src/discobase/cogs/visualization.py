@@ -26,14 +26,13 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel
     ) -> None:
-        logger.debug("table cmd initialised")
+        logger.debug("Table cmd initialized.")
         await interaction.response.send_message(
             content=f"Searching for table `{name}`..."
         )
         table_name = name.name.replace("-", " ").lower()
 
         try:
-            logger.debug("Finding table")
             table = self.db.tables[table_name]
             await interaction.edit_original_response(
                 content=f"Table `{table_name}` found! Gathering data..."
@@ -53,6 +52,10 @@ class Visualization(commands.Cog):
 
         table_values = await table.find()
         logger.info(table_values)
+
+        await interaction.edit_original_response(
+            content="Still gathering data..."
+        )
 
         for game in table_values:
             for col in table_columns:
@@ -85,6 +88,7 @@ class Visualization(commands.Cog):
         table: discord.TextChannel,
         name: str,
     ) -> None:
+        logger.debug("Column cmd initialized.")
         await interaction.response.send_message(
             f"Searching for table `{table.name}`..."
         )
@@ -102,7 +106,8 @@ class Visualization(commands.Cog):
 
         try:
             column = [col for col in col_table.__disco_keys__ if col.lower() == name.lower()][0]
-        except (IndexError, ValueError):
+        except (IndexError, ValueError) as e:
+            logger.error(e)
             await interaction.edit_original_response(
                 content=f"The column `{name}` does not exist in the table `{col_table.__disco_name__}`."
             )
