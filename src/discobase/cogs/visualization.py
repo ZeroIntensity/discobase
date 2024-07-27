@@ -1,12 +1,9 @@
-from typing import Any
-
 import discord
 from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 
-if __name__ == "__main__":
-    from ..ui.embed import ArrowButtons, EmbedFromContent, EmbedStyle
+from src.discobase.ui import embed
 
 
 class Visualization(commands.Cog):
@@ -18,6 +15,10 @@ class Visualization(commands.Cog):
         self.bot = bot
         self.db = self.bot.db
 
+    @app_commands.command()
+    async def hello(self, interaction):
+        await interaction.response.send_message("Hello!")
+
     @app_commands.command(description="View the selected table.")
     @app_commands.describe(name="The name of the table.")
     async def table(
@@ -25,56 +26,48 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel
     ) -> None:
+        logger.debug("table cmd initialised")
         await interaction.response.send_message(
             content=f"Searching for table `{name}`..."
         )
+        table_name = name.name.replace("-", " ").lower()
+
         try:
-            table = self.db.tables[name]
+            logger.debug("Finding table")
+            table = self.db.tables[table_name]
             await interaction.edit_original_response(
-                content=f"Table `{name}` found! Gathering data..."
+                content=f"Table `{table_name}` found! Gathering data..."
             )
         except IndexError as e:
             logger.error(e)
             await interaction.edit_original_response(
-                content=f"The table `{name}` does not exist."
+                content=f"The table `{name.name}` does not exist."
             )
             return
 
-        try:
-            logger.debug("Getting table columns")
-            table_columns = table.__disco_keys__
-        except Exception as e:
-            logger.error(e)
-            return
+        logger.debug("Getting table columns")
+        table_columns = [col.title() for col in table.__disco_keys__]  # convert set to list to enable subscripting
 
-        data: dict[str, Any] = {}
+        data: dict[str:list] = {}
+        for col in table_columns:
+            data[col] = []
 
-        try:
-            logger.debug("Making data dict")
+        table_values = await table.find()
+        logger.info(table_values)
+
+        for game in table_values:
             for col in table_columns:
-                data[col] = getattr(table, col)
-        except Exception as e:
-            logger.error(e)
-            return
+                data[col].append(getattr(game, col))
 
-        try:
-            logger.debug("Making embeds")
-            embeds = EmbedFromContent(
-                title=f"Table: {table.__disco_name__}",
-                content=data,
-                headers=table_columns,
-                style=EmbedStyle.TABLE
-            ).create()
-        except Exception as e:
-            logger.error(e)
-            return
+        embed_from_content = embed.EmbedFromContent(
+            title=f"Table: {table.__disco_name__.title()}",
+            content=data,
+            headers=table_columns,
+            style=embed.EmbedStyle.TABLE
+        )
+        embeds = embed_from_content.create()
 
-        try:
-            logger.debug("Making view")
-            view = ArrowButtons(content=embeds)
-        except Exception as e:
-            logger.error(e)
-            return
+        view = embed.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
             embeds=embeds,
@@ -117,14 +110,14 @@ class Visualization(commands.Cog):
 
         data = [table_column]
 
-        embeds = EmbedFromContent(
+        embeds = embed.EmbedFromContent(
             title=f"Column `{name.title()}` From Table `{col_table.__disco_name__.title()}`",
             content=data,
             headers=None,
-            style=EmbedStyle.COLUMN
+            style=embed.EmbedStyle.COLUMN
         ).create()
 
-        view = ArrowButtons(content=embeds)
+        view = embed.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
             embeds=embeds,
