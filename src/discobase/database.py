@@ -167,10 +167,13 @@ class Database:
         """
         logger.info("Initializing the bot.")
         # Load external commands
+        coros: list[Coroutine] = []
         for module in iter_modules(path=["cogs"], prefix="cogs."):
             logger.debug(f"Loading module with cog: {module}")
-            await self.bot.load_extension(module.name)
+            coros.append(self.bot.load_extension(module.name))
 
+        await asyncio.gather(*coros)
+        logger.info("Syncing slash commands, this might take a minute.")
         await self.bot.tree.sync()
         logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
