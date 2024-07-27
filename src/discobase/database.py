@@ -145,6 +145,7 @@ class Database:
 
     # This needs to be async for use in gather()
     async def _set_open(self) -> None:
+        await self.wait_ready()
         self.open = True
 
     async def init(self) -> None:
