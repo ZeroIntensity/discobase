@@ -59,6 +59,19 @@ class _Record(BaseModel):
     """Base64 encoded Pydantic model dump of the record."""
     indexes: Dict
 
+    @classmethod
+    def from_data(cls, data: Table) -> _Record:
+        logger.debug(f"Generating a _Record from data: {data}")
+        return _Record(
+            content=urlsafe_b64encode(  # Record JSON data is stored in base64
+                data.model_dump_json().encode("utf-8"),
+            ).decode("utf-8"),
+            indexes={},
+        )
+
+    def decode_content(self, record: Table | type[Table]) -> Table:
+        return record.model_validate_json(urlsafe_b64decode(self.content))
+
 
 class _IndexableRecord(BaseModel):
     key: int
@@ -952,13 +965,7 @@ class Database:
 
         table_metadata = self._get_table_metadata(record.__disco_name__)
 
-        record_data = _Record(
-            content=urlsafe_b64encode(  # Record JSON data is stored in base64
-                record.model_dump_json().encode("utf-8"),
-            ).decode("utf-8"),
-            indexes={},
-        )
-
+        record_data = _Record.from_data(record)
         main_table: discord.TextChannel = self._find_channel(
             table_metadata.table_channel
         )
@@ -983,6 +990,77 @@ class Database:
                 )
 
         return await message.edit(content=record_data.model_dump_json())
+
+    async def _update_record(self, record: Table) -> None:
+        """
+        Updates an existing record in a table.
+
+        Args:
+            record: The record object being written to the table
+
+        Returns:
+            The `discord.Message` that contains the new entry.
+        """
+        if record.__disco_id__ == -1:
+            # Sanity check
+            raise DatabaseCorruptionError("record must have an id to update")
+
+        # TODO: Gather the coros in this function
+        metadata = self._get_table_metadata(record.__disco_name__)
+        main_table: discord.TextChannel = self._find_channel(
+            metadata.table_channel
+        )
+        msg = await main_table.fetch_message(record.__disco_id__)
+        current = _Record.model_validate_json(msg.content).decode_content(
+            record
+        )
+        await msg.edit(content=_Record.from_data(record).model_dump_json())
+
+        for new, old in zip(
+            record.model_dump().items(),
+            current.model_dump().items(),
+        ):
+            field = new[0]
+            if field != old[0]:
+                raise DatabaseCorruptionError(
+                    f"field name {field} does not match {old[0]}"
+                )
+
+            new_value = new[1]
+            old_value = old[1]
+            if new_value == old_value:
+                # Nothing changed
+                continue
+
+            channel = self._find_channel(
+                metadata.index_channels[f"{record.__disco_name__}_{field}"]
+            )
+            hashed_field, target_index = self._as_hashed(
+                metadata,
+                new_value,
+            )
+            await self._write_index_record(
+                channel,
+                metadata,
+                target_index,
+                hashed_field,
+                msg.id,
+            )
+
+            old_index = self._to_index(metadata, self._hash(old_value))
+            old_msg = await self._lookup_message(channel, metadata, old_index)
+            old_record = _IndexableRecord.from_message(old_msg.content)
+
+            if not old_record:
+                raise DatabaseCorruptionError("got null record somehow")
+
+            if not len(old_record.record_ids):
+                # We can nullify this entry
+                await old_msg.edit(content="null")
+            else:
+                # There are other entries with this value, only remove this ID
+                old_record.record_ids.remove(msg.id)
+                await old_msg.edit(content=old_record.model_dump_json())
 
     async def _find_records(
         self,
@@ -1093,9 +1171,7 @@ class Database:
             for record_id in record_ids:
                 message = await main_table.fetch_message(record_id)
                 record = _Record.model_validate_json(message.content)
-                entry = table.model_validate_json(
-                    urlsafe_b64decode(record.content),
-                )
+                entry = record.decode_content(table)
                 entry.__disco_id__ = message.id
                 records.append(entry)
 

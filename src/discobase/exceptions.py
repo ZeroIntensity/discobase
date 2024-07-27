@@ -26,3 +26,9 @@ class DatabaseTableError(DiscobaseError):
     """
     Something is wrong with a `Table` type.
     """
+
+
+class DatabaseLookupError(DiscobaseError):
+    """
+    Something went wrong with an entry lookup.
+    """

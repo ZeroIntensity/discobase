@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Set
+from typing import (TYPE_CHECKING, Any, ClassVar, Literal, Optional, Set,
+                    overload)
 
 from pydantic import BaseModel
 from typing_extensions import Self
@@ -8,8 +9,8 @@ from typing_extensions import Self
 if TYPE_CHECKING:
     from .database import Database
 
-from .exceptions import (DatabaseStorageError, DatabaseTableError,
-                         NotConnectedError)
+from .exceptions import (DatabaseLookupError, DatabaseStorageError,
+                         DatabaseTableError, NotConnectedError)
 
 __all__ = ("Table",)
 
@@ -47,7 +48,7 @@ class Table(BaseModel):
 
     async def save(self) -> None:
         """
-        Commit the current object to the database.
+        Save the entry to the database as a new record.
 
         Example:
             ```py
@@ -65,21 +66,54 @@ class Table(BaseModel):
             ```
         """
         self._ensure_db()
+        assert self.__disco_database__
         if self.__disco_id__ != -1:
             raise DatabaseStorageError(
-                "this instance has already been saved, you should call update() instead"  # noqa
+                "this entry has already been written, did you mean to call update()?",  # noqa
             )
-
-        assert self.__disco_database__
         msg = await self.__disco_database__._add_record(self)
         self.__disco_id__ = msg.id
+
+    async def update(self) -> None:
+        """
+        Update the entry in-place.
+
+        Example:
+            ```py
+            import discobase
+
+            db = discobase.Database("My database")
+
+            @db.table
+            class User(discobase.Table):
+                name: str
+                password: str
+
+            # Using top-level await for this example
+            user = await User.find_unique(name="Peter", password="foobar")
+            user.password = str(hash(password))
+            await user.update()
+            ```
+        """
+
+        self._ensure_db()
+        assert self.__disco_database__
+        if self.__disco_id__ == -1:
+            raise DatabaseStorageError(
+                "this entry has not been written, did you mean to call save()?",  # noqa
+            )
+        await self.__disco_database__._update_record(self)
+
+    async def commit(self) -> None: ...
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:
         """
-        Find a list of instances of the schema type.
+        Find a list of entries in the database.
+
         Args:
             **kwargs: Values to search for. These should be keys in the schema.
+
         Example:
             ```py
             import discobase
@@ -98,3 +132,55 @@ class Table(BaseModel):
             cls.__disco_name__,
             kwargs,
         )
+
+    @classmethod
+    @overload
+    async def find_unique(
+        cls,
+        *,
+        strict: Literal[True] = True,
+        **kwargs: Any,
+    ) -> Self: ...
+
+    @classmethod
+    @overload
+    async def find_unique(
+        cls,
+        *,
+        strict: Literal[False] = False,
+        **kwargs: Any,
+    ) -> Self | None: ...
+
+    @classmethod
+    async def find_unique(
+        cls,
+        *,
+        strict: bool = True,
+        **kwargs: Any,
+    ) -> Self | None:
+        """
+        Find a unique entry in the database.
+
+        Args:
+            **kwargs: Values to search for. These should be keys in the schema.
+        """
+
+        if not kwargs:
+            raise ValueError("a query must be passed to find_unique")
+
+        values: list[Self] = await cls.find(**kwargs)
+
+        if not len(values):
+            if strict:
+                raise DatabaseLookupError(
+                    f"no entry found with query {kwargs}",
+                )
+
+            return None
+
+        if strict and (1 < len(values)):
+            raise DatabaseLookupError(
+                "more than one entry was found with find_unique"
+            )
+
+        return values[0]
