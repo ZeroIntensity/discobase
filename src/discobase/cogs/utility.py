@@ -41,7 +41,6 @@ class Utility(commands.Cog):
             )
             return
 
-        # Get columns and values in data variable; json format or | separators?
         try:
             await interaction.edit_original_response(
                 content=f"Table `{table_name} found! Adding data to table..."
