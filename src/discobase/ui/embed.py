@@ -149,7 +149,7 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=f"Page: {self.page_number}/{self.page_total} •"
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
 
             embeds.append(discord_embed)
@@ -182,7 +182,7 @@ class EmbedFromContent:
                 icon_url=self.icon_url
             )
             discord_embed.set_footer(
-                text=f"Page: {self.page_number}/{self.page_total} •"
+                text=f"Page: {self.page_number}/{self.page_total}"
             )
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
