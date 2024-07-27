@@ -5,6 +5,7 @@ import sys
 
 import discord
 import pytest
+from pydantic import Field
 
 import discobase
 from discobase.exceptions import DatabaseTableError
@@ -131,6 +132,7 @@ async def test_long_resize(database: discobase.Database):
     @database.table
     class X(discobase.Table):
         foo: str
+        bar: str = Field(default="bar")
 
     await database.build_tables()
 
@@ -140,6 +142,7 @@ async def test_long_resize(database: discobase.Database):
     items = await X.find()
     assert len(items) == len(string.ascii_letters)
     for i in items:
+        assert i.bar == "bar"
         assert i.foo in string.ascii_letters
 
 
