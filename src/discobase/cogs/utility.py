@@ -16,10 +16,6 @@ class Utility(commands.Cog):
         self.bot = bot
         self.db = self.bot.db
 
-    @app_commands.command(name="hello")
-    async def hello(self, interaction: discord.Interaction):
-        await interaction.response.send_message(f"hello {interaction.user}!")
-
     @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
         table="Choose the table you want to insert the data into.",
