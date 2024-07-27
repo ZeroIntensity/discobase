@@ -101,7 +101,7 @@ class Visualization(commands.Cog):
             return
 
         try:
-            column = [col for col in col_table.__disco_keys__ if col == name][0]
+            column = [col for col in col_table.__disco_keys__ if col.lower() == name.lower()][0]
         except (IndexError, ValueError):
             await interaction.edit_original_response(
                 content=f"The column `{name}` does not exist in the table `{col_table.__disco_name__}`."
