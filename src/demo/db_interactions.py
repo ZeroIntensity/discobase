@@ -1,43 +1,43 @@
 import discord
-from models import BookmarkedMessage
+import models
+from demobot_config import default_icon
 
 import discobase
 
 
-async def add(interaction: discord.Interaction, message: discord.Message, title: str):
+async def add(interaction: discord.Interaction, message: discord.Message, title: str) -> models.BookmarkedMessage:
     """Add a message to the bookmarks.
 
     Args:
-        interaction: The `discord.Interaction` that initiated the command.
+        interaction: The `discord.Interaction` that initiated the command
         message: The `discord.Message` that is being bookmarked
+        title: The title provided by the modal
     Returns:
-        tuple[Result]: _description_
+        models.BookmarkedMessage: the record that was saved to the database
     """
-    record = BookmarkedMessage(
+
+    avatar_url = message.author.display_avatar.url if message.author.display_avatar is not None else default_icon
+    record = models.BookmarkedMessage(
         user_id=interaction.user.id,
         title=title,
-        channel_id=message.channel.id,
-        message_id=message.id
+        author_name=message.author.name,
+        author_avatar_url=avatar_url,
+        message_content=message.content
     )
     await record.save()
+    return record
 
-async def get(channel_bot: discord.Client, db: discobase.Database, interaction: discord.Interaction) -> list[tuple[str, discord.Message]]:
+async def get(db: discobase.Database, interaction: discord.Interaction) -> list[models.BookmarkedMessage]:
     """Get bookmarks for a user, or across the whole server. If getting bookmarks for the whole sever, a search string is required.
 
     Args:
-        interaction
+        db: Discobase database instance
+        interaction: discord interaction that triggered the function
 
     Returns:
-        A tuple of bookmarked messages
+        list[models.BookmarkedMessage]: the list of bookmarks saved by the user
     """
-    records = await db.tables[BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id)
-
-    return_data = []
-    for record in records:
-        channel = await channel_bot.fetch_channel(record.channel_id)
-        message = await channel.fetch_message(record.message_id)
-        return_data.append((record.title, message))
-    return return_data
+    return await db.tables[models.BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id)
 
 async def remove(db: discobase.Database, user: discord.User, mid: discord.Message.id):
     """Remove a bookmark from the list.
