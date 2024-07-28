@@ -640,7 +640,7 @@ class TableCursor:
             new_value = new[1]
             old_value = old[1]
             if new_value == old_value:
-                # Nothing changed
+                logger.info("Nothing changed.")
                 continue
 
             channel = self._find_channel(
@@ -661,12 +661,14 @@ class TableCursor:
             if not old_record:
                 raise DatabaseCorruptionError("got null record somehow")
 
-            if not len(old_record.record_ids):
-                # We can nullify this entry
+            if len(old_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
                 await old_msg.edit(content="null")
                 self.metadata.current_records -= 1
             else:
-                # There are other entries with this value, only remove this ID
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
                 old_record.record_ids.remove(msg.id)
                 await old_msg.edit(content=old_record.model_dump_json())
 
@@ -915,3 +917,52 @@ class TableCursor:
         metadata.message_id = message.id
         logger.debug(f"Generated table metadata: {metadata!r}")
         return self
+
+    async def delete_record(self, record: Table) -> None:
+        """
+        Deletes an existing record in a table.
+
+        Args:
+            record: The record object being deleted from the table.
+        """
+        if record.__disco_id__ == -1:
+            # Sanity check
+            raise DatabaseCorruptionError("record must have an id to update")
+
+        metadata = self.metadata
+        main_table: discord.TextChannel = self._find_channel(
+            metadata.table_channel
+        )
+        msg = await main_table.fetch_message(record.__disco_id__)
+        current = _Record.model_validate_json(msg.content).decode_content(
+            record
+        )
+
+        for field, value in current.model_dump().items():
+            # TODO: Gather this loop
+            channel = self._find_channel(
+                metadata.index_channels[f"{current.__disco_name__}_{field}"]
+            )
+
+            # TODO: Retain DRY principle with update_record
+            index = self._to_index(self._hash(value))
+            index_message = await self._lookup_message(channel, index)
+            index_record = _IndexableRecord.from_message(index_message.content)
+
+            if not index_record:
+                raise DatabaseCorruptionError("got null record somehow")
+
+            if len(index_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
+                await index_message.edit(content="null")
+                self.metadata.current_records -= 1
+            else:
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
+                index_record.record_ids.remove(msg.id)
+                await index_message.edit(
+                    content=index_record.model_dump_json(),
+                )
+
+        await msg.delete()

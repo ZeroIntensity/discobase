@@ -165,3 +165,16 @@ async def test_long_resize(database: discobase.Database):
 #     await database.clean()
 #
 #     assert len(await Whatever.find()) == 0
+
+
+async def test_delete(database: discobase.Database):
+    @database.table
+    class DeleteTest(discobase.Table):
+        foo: str
+
+    await database.build_tables()
+    test = DeleteTest(foo="test")
+    await test.save()
+    assert len(await DeleteTest.find()) == 1
+    await test.delete()
+    assert len(await DeleteTest.find()) == 0
