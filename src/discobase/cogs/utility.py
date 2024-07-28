@@ -18,9 +18,7 @@ class Utility(commands.Cog):
         self.bot = bot
         self.db = self.bot.db
 
-    @app_commands.command(
-        description="Insert new data into a table."
-    )
+    @app_commands.command(description="Insert new data into a table.")
     @app_commands.describe(
         table="Choose the table you want to insert the data into.",
         data="The data that is to be inserted.",
@@ -121,8 +119,7 @@ class Utility(commands.Cog):
                     embed.description = results_str
 
                     await interaction.edit_original_response(
-                        content="",
-                        embed=embed
+                        content="", embed=embed
                     )
                 else:
                     await interaction.edit_original_response(
@@ -158,8 +155,14 @@ class Utility(commands.Cog):
 
             try:
                 if column in table_info.__disco_keys__:
-                    column_name = [col for col in table_info.__disco_keys__ if col.lower() == column.lower()][0]
-                    found_table = (await table_info.find(**{column_name: current_value}))[0]
+                    column_name = [
+                        col
+                        for col in table_info.__disco_keys__
+                        if col.lower() == column.lower()
+                    ][0]
+                    found_table = (
+                        await table_info.find(**{column_name: current_value})
+                    )[0]
                     setattr(found_table, column_name, new_value)
                     found_table.update()
                     await interaction.edit_original_response(
@@ -172,25 +175,23 @@ class Utility(commands.Cog):
             except ValidationError:
                 await interaction.edit_original_response(
                     content=f"`{new_value}` could not be converted to the field's data type, use `/schema` to "
-                            f"check the data type of the column before trying again."
+                    f"check the data type of the column before trying again."
                 )
         else:
             await interaction.edit_original_response(
                 content="There is no table with that name, try creating a table."
             )
 
-    @app_commands.command(
-        description="Deletes a record from a table."
-    )
+    @app_commands.command(description="Deletes a record from a table.")
     @app_commands.describe(
         table="The table from which you want to delete",
-        record="The record you want to delete - formatted as a json."
+        record="The record you want to delete - formatted as a json.",
     )
     async def delete(
-            self,
-            interaction: discord.Interaction,
-            table: discord.TextChannel,
-            record: str
+        self,
+        interaction: discord.Interaction,
+        table: discord.TextChannel,
+        record: str,
     ) -> None:
         logger.debug("Delete cmd initialized.")
         await interaction.response.send_message(
@@ -240,10 +241,7 @@ class Utility(commands.Cog):
     @app_commands.command(
         description="Resets the database, deleting all channels and unloading tables."
     )
-    async def reset(
-            self,
-            interaction: discord.Interaction
-    ) -> None:
+    async def reset(self, interaction: discord.Interaction) -> None:
         logger.debug("Reset cmd initialized.")
         await interaction.response.send_message(
             content=f"Resetting the database, `{self.db.name}`..."

@@ -22,9 +22,7 @@ class Visualization(commands.Cog):
     @app_commands.command(description="View the selected table.")
     @app_commands.describe(name="The name of the table.")
     async def table(
-        self,
-        interaction: discord.Interaction,
-        name: discord.TextChannel
+        self, interaction: discord.Interaction, name: discord.TextChannel
     ) -> None:
         logger.debug("Table slash cmd initialized.")
         await interaction.response.send_message(
@@ -44,7 +42,9 @@ class Visualization(commands.Cog):
             )
             return
 
-        table_columns = [col for col in table.__disco_keys__]  # convert set to list to enable subscripting
+        table_columns = [
+            col for col in table.__disco_keys__
+        ]  # convert set to list to enable subscripting
 
         data: dict[str:list] = {}
         for col in table_columns:
@@ -65,16 +65,14 @@ class Visualization(commands.Cog):
             title=f"Table: {table.__disco_name__.title()}",
             content=data,
             headers=table_columns,
-            style=em.EmbedStyle.TABLE
+            style=em.EmbedStyle.TABLE,
         )
         embeds = embed_from_content.create()
 
         view = em.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
-            content="",
-            embed=embeds[0],
-            view=view
+            content="", embed=embeds[0], view=view
         )
 
     @app_commands.command(description="View the column data.")
@@ -105,7 +103,11 @@ class Visualization(commands.Cog):
             return
 
         try:
-            column = [col for col in col_table.__disco_keys__ if col.lower() == name.lower()][0]
+            column = [
+                col
+                for col in col_table.__disco_keys__
+                if col.lower() == name.lower()
+            ][0]
         except (IndexError, ValueError) as e:
             logger.error(e)
             await interaction.edit_original_response(
@@ -120,23 +122,19 @@ class Visualization(commands.Cog):
             title=f"Column `{name.title()}` from Table `{col_table.__disco_name__.title()}`",
             content=column_values,
             headers=None,
-            style=em.EmbedStyle.COLUMN
+            style=em.EmbedStyle.COLUMN,
         ).create()
 
         view = em.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
-            content="",
-            embed=embeds[0],
-            view=view
+            content="", embed=embeds[0], view=view
         )
 
     @app_commands.command(
         description="Displays the number of tables and the names of the tables."
     )
-    async def tablestats(
-        self, interaction: discord.Interaction
-    ) -> None:
+    async def tablestats(self, interaction: discord.Interaction) -> None:
         logger.debug("Tablestats slash cmd initialized.")
         await interaction.response.send_message(
             content="Getting table statistics..."
@@ -165,8 +163,7 @@ class Visualization(commands.Cog):
             )
 
             await interaction.edit_original_response(
-                content="",
-                embed=embed_gen
+                content="", embed=embed_gen
             )
         except Exception as e:
             logger.exception(e)
@@ -193,7 +190,10 @@ class Visualization(commands.Cog):
         if table.name in self.db.tables:
             table_info = self.db.tables[table.name]
             table_schema = table_info.model_json_schema()
-            schemas = [table_schema["properties"][disco_key] for disco_key in table_info.__disco_keys__]
+            schemas = [
+                table_schema["properties"][disco_key]
+                for disco_key in table_info.__disco_keys__
+            ]
 
             embed_gen = em.EmbedFromContent(
                 title=f"Table: {table.name.title()}",
@@ -203,8 +203,7 @@ class Visualization(commands.Cog):
             ).create()
 
             await interaction.edit_original_response(
-                content="",
-                embed=embed_gen
+                content="", embed=embed_gen
             )
         else:
             await interaction.edit_original_response(

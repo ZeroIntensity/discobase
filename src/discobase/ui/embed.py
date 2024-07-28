@@ -13,7 +13,7 @@ How to Use:
 3. Input the ArrowButton class as the view, and the embeds as the content in interaction.send_message.
 """
 
-__all__ = ['ArrowButtons', 'EmbedFromContent', 'EmbedStyle']
+__all__ = ["ArrowButtons", "EmbedFromContent", "EmbedStyle"]
 
 
 class ArrowButtons(discord.ui.View):
@@ -26,8 +26,12 @@ class ArrowButtons(discord.ui.View):
         logger.debug(f"pages in button {self.pages}")
         self.on_ready()
 
-    @discord.ui.button(label='◀', style=discord.ButtonStyle.primary, custom_id='l_button')
-    async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(
+        label="◀", style=discord.ButtonStyle.primary, custom_id="l_button"
+    )
+    async def back(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
         """Controls the left button on the qotd list embed"""
         # move back a position in the embed list
         self.position -= 1
@@ -37,23 +41,31 @@ class ArrowButtons(discord.ui.View):
             button.disabled = True
 
         # set the right button to a variable
-        right_button = [x for x in self.children if x.custom_id == 'r_button'][0]
+        right_button = [x for x in self.children if x.custom_id == "r_button"][
+            0
+        ]
 
         # check if we're not on the last page, if yes then enable right button
         if not self.position == self.pages - 1:
             right_button.disabled = False
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.response.edit_message(
+            embed=self.content[self.position], view=self
+        )
 
-    @discord.ui.button(label='▶', style=discord.ButtonStyle.primary, custom_id='r_button')
-    async def forward(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(
+        label="▶", style=discord.ButtonStyle.primary, custom_id="r_button"
+    )
+    async def forward(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
         """Controls the right button on the qotd list embed"""
         # move forward a position in the embed list
         self.position += 1
 
         # set a variable for left button
-        left_button = [x for x in self.children if x.custom_id == 'l_button'][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
         # check if we're not on the first page, if yes then enable left button
         if not self.position == 0:
             left_button.disabled = False
@@ -63,12 +75,16 @@ class ArrowButtons(discord.ui.View):
             button.disabled = True
 
         # update discord message
-        await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        await interaction.response.edit_message(
+            embed=self.content[self.position], view=self
+        )
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
-        left_button = [x for x in self.children if x.custom_id == 'l_button'][0]
-        right_button = [x for x in self.children if x.custom_id == 'r_button'][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
+        right_button = [x for x in self.children if x.custom_id == "r_button"][
+            0
+        ]
 
         # if we only have one page, disable both buttons
         if self.pages == 1:
@@ -89,12 +105,13 @@ class EmbedStyle(StrEnum):
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
 class EmbedFromContent:
     """Creates a list of embeds suited for pagination from inserted content."""
+
     def __init__(
-            self,
-            title: str,
-            content: list[str] | dict | list[dict],
-            style: "EmbedStyle",
-            headers: list[str] | None = None
+        self,
+        title: str,
+        content: list[str] | dict | list[dict],
+        style: "EmbedStyle",
+        headers: list[str] | None = None,
     ) -> None:
         """
         Sets the base parameters for the embeds.
@@ -142,18 +159,16 @@ class EmbedFromContent:
         # Create each embed with the data
         for i in range(0, len(column_data), entries_per_page):
             self.page_number += 1
-            embed_content = "\n".join(column_data[i:i+entries_per_page])
+            embed_content = "\n".join(column_data[i : i + entries_per_page])
             discord_embed = discord.Embed(
                 color=self.color,
                 title=self.title,
-                type='rich',
+                type="rich",
                 description=embed_content,
-                timestamp=dt.now()
+                timestamp=dt.now(),
             )
             discord_embed.set_author(
-                name=self.author,
-                url=self.url,
-                icon_url=self.icon_url
+                name=self.author, url=self.url, icon_url=self.icon_url
             )
             discord_embed.set_footer(
                 text=f"Page: {self.page_number}/{self.page_total}"
@@ -172,7 +187,9 @@ class EmbedFromContent:
 
         column_names: list = self.headers
         table_data: dict = self.content
-        self.page_total = ceil(len(self.content[self.headers[0]]) / entries_per_page)
+        self.page_total = ceil(
+            len(self.content[self.headers[0]]) / entries_per_page
+        )
 
         # get the len of the first column's data
         for i in range(0, len(table_data[column_names[0]]), entries_per_page):
@@ -180,13 +197,11 @@ class EmbedFromContent:
             discord_embed = discord.Embed(
                 color=self.color,
                 title=self.title,
-                type='rich',
-                timestamp=dt.now()
+                type="rich",
+                timestamp=dt.now(),
             )
             discord_embed.set_author(
-                name=self.author,
-                url=self.url,
-                icon_url=self.icon_url
+                name=self.author, url=self.url, icon_url=self.icon_url
             )
             discord_embed.set_footer(
                 text=f"Page: {self.page_number}/{self.page_total}"
@@ -194,11 +209,14 @@ class EmbedFromContent:
             # create fields for each column with 10 data entries
             for k, v in table_data.items():
                 field_title = k.title()
-                field_content = "\n".join([f"**{i + 1}.** {value}" for i, value in enumerate(v[i:i+entries_per_page])])
+                field_content = "\n".join(
+                    [
+                        f"**{i + 1}.** {value}"
+                        for i, value in enumerate(v[i : i + entries_per_page])
+                    ]
+                )
                 discord_embed.add_field(
-                    name=field_title,
-                    value=field_content,
-                    inline=True
+                    name=field_title, value=field_content, inline=True
                 )
             embeds.append(discord_embed)
 
@@ -209,22 +227,13 @@ class EmbedFromContent:
         Creates an embed that has the schema information. Column names as field titles, and type as field values.
         """
         embed = discord.Embed(
-            title=self.title,
-            color=self.color,
-            type='rich',
-            timestamp=dt.now()
+            title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(
-            name=self.author,
-            url=self.url,
-            icon_url=self.icon_url
-        )
+        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
 
         for content in self.content:
             embed.add_field(
-                name=content["title"],
-                value=content["type"],
-                inline=True
+                name=content["title"], value=content["type"], inline=True
             )
 
         return embed
@@ -234,15 +243,8 @@ class EmbedFromContent:
         Creates an embed with a default visual style.
         """
         embed = discord.Embed(
-            title=self.title,
-            color=self.color,
-            type='rich',
-            timestamp=dt.now()
+            title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(
-            name=self.author,
-            url=self.url,
-            icon_url=self.icon_url
-        )
+        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
 
         return embed
