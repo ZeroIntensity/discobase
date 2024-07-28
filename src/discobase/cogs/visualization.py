@@ -140,14 +140,37 @@ class Visualization(commands.Cog):
     ) -> None:
         pass
 
-    @app_commands.command(description="Retrieves and displays the schema for the table.")
+    @app_commands.command(
+        description="Retrieves and displays the schema for the table.",
+    )
     @app_commands.describe(
-        table="Choose the table you want to retrieve the schema from."
+        table="Choose the table you want to retrieve the schema from.",
     )
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
-        pass
+        table_info: list | None = None
+        table_schema: dict | None = None
+        schemas: list[dict] | None = None
+        embed_gen: discord.Embed | None = None
+
+        if table.name in self.bot.db.tables:
+            table_info = self.bot.db.tables[table.name]
+            table_schema = table_info.model_json_schema()
+            schemas = [table_schema["properties"][disco_key] for disco_key in table_info.__disco_keys__]
+
+            embed_gen = embed.EmbedFromContent(
+                title=f"Table: {table.name.title()}",
+                content=schemas,
+                headers=None,
+                style=embed.EmbedStyle.SCHEMA
+            ).create()
+
+            await interaction.response.send_message(embed=embed_gen)
+        else:
+            await interaction.response.send_message(
+                "There is no table with that name, try creating a table."
+            )
 
 
 async def setup(bot: commands.Bot) -> None:
