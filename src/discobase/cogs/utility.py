@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 from pydantic import ValidationError
+from src.discobase.ui import embed as em
 
 
 class Utility(commands.Cog):
@@ -108,11 +109,14 @@ class Utility(commands.Cog):
                     for count, value in enumerate(results, start=1):
                         results_str += f"**{count}**. {str(value)}\n"
 
-                    embed: discord.Embed = discord.Embed(
+                    embed = em.EmbedFromContent(
                         title=f"Search Result - {results_found} Record(s) Found",
-                        description=results_str,
-                        color=discord.Color.blurple(),
-                    )
+                        content=[],
+                        headers=None,
+                        style=em.EmbedStyle.DEFAULT,
+                    ).create()
+
+                    embed.description = results_str
 
                     await interaction.edit_original_response(
                         content="",
