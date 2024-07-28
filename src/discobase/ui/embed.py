@@ -80,6 +80,7 @@ class EmbedStyle(StrEnum):
     COLUMN = auto()
     TABLE = auto()
     SCHEMA = auto()
+    DEFAULT = auto()
 
 
 # TODO add support for character limits: https://anidiots.guide/.gitbook/assets/first-bot-embed-example.png
@@ -119,6 +120,8 @@ class EmbedFromContent:
                 return self._table_display()
             case "schema":
                 return self._schema_display()
+            case "default":
+                return self._default_display()
             case _:
                 raise ValueError("Invalid style input.")
 
@@ -221,3 +224,22 @@ class EmbedFromContent:
             )
 
         return embed
+    
+    def _default_display(self) -> discord.Embed:
+        """
+        Creates an embed with a default visual style.
+        """
+        embed = discord.Embed(
+            title=self.title,
+            color=self.color,
+            type='rich',
+            timestamp=dt.now()
+        )
+        embed.set_author(
+            name=self.author,
+            url=self.url,
+            icon_url=self.icon_url
+        )
+
+        return embed
+
