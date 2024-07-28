@@ -976,7 +976,6 @@ class TableCursor:
             # Sanity check
             raise DatabaseCorruptionError("record must have an id to update")
 
-        record.__disco_id__ = -1
         metadata = self.metadata
         main_table: discord.TextChannel = self._find_channel(
             metadata.table_channel
@@ -1011,4 +1010,5 @@ class TableCursor:
                     content=index_record.model_dump_json(),
                 )
 
+        record.__disco_id__ = -1
         await msg.delete()
