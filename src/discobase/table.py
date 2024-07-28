@@ -127,6 +127,8 @@ class Table(BaseModel):
         Args:
             **kwargs: Values to search for. These should be keys in the schema.
 
+        Returns:
+            list[Table]: The list of objects that match the values in kwargs
         Example:
             ```py
             import discobase
@@ -176,6 +178,10 @@ class Table(BaseModel):
 
         Args:
             **kwargs: Values to search for. These should be keys in the schema.
+
+        Returns:
+            Table | None: Returns a single object that matches the values in
+            kwargs or None if no match is found.
         """
 
         if not kwargs:

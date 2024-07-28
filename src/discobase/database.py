@@ -126,7 +126,7 @@ class Database:
         If it doesn't exist, this method creates one.
 
         Returns:
-            The metadata channel, either created or found.
+            discord.TextChannel: The metadata channel, either created or found.
         """
         metadata_channel_name = "_dbmetadata"
         found_channel: discord.TextChannel | None = None
@@ -344,12 +344,12 @@ class Database:
             bot_token: Discord API bot token to log in to.
 
         Returns:
-            Created `asyncio.Task` object. Note that the database
-            will store this internally, so you don't have to worry
-            about losing the reference. By default, this task will
-            never get `await`ed, so this function will not keep the
-            event loop running. If you want to keep the event loop running,
-            make sure to `await` the returned task object later.
+            asyncio.Task[None]: The created `asyncio.Task` object.
+            Note that the database will store this internally, so you
+            don't have to worry about losing the reference. By default,
+            this task will never get `await`ed, so this function will not
+            keep the event loop running. If you want to keep the event loop
+            running, make sure to `await` the returned task object later.
 
         Example:
             ```py
@@ -397,7 +397,7 @@ class Database:
             bot_token: Discord API bot token to log in to.
 
         Returns:
-            An asynchronous context manager.
+            AsyncGeneratorContextManager: An asynchronous context manager.
             See `contextlib.asynccontextmanager` for details.
 
         Example:
@@ -448,7 +448,7 @@ class Database:
             ```
 
         Returns:
-            The same object passed to `clas` -- this is in order
+            Type[Table]: The same object passed to `clas` -- this is in order
             to allow use as a decorator.
         """
         if not issubclass(clas, Table):
