@@ -148,37 +148,34 @@ class Utility(commands.Cog):
         new_value: str,
     ) -> None:
         table_info: list | None = None
-        try:
-            if table.name in self.db.tables:
-                await interaction.response.send_message(
-                    content=f"Table `{table.name}` found! Searching for record..."
-                )
-                table_info = self.db.tables[table.name]
+        if table.name in self.db.tables:
+            await interaction.response.send_message(
+                content=f"Table `{table.name}` found! Searching for record..."
+            )
+            table_info = self.db.tables[table.name]
 
-                try:
-                    for disco_key in table_info.__disco_keys__:
-                        if disco_key == column:
-                            found_table = table_info.find(**{column: current_value})
-                            setattr(found_table, column, new_value)
-                            found_table.update()
-                            await interaction.edit_original_response(
-                                content=f"Successfully updated the value of **{column}** in **{table.name}**."
-                            )
-                        else:
-                            await interaction.edit_original_response(
-                                content="The column does not exist."
-                            )
-                except ValidationError:
+            try:
+                if column in table_info.__disco_keys__:
+                    column_name = [col for col in table_info.__disco_keys__ if col.lower() == column.lower()][0]
+                    found_table = (await table_info.find(**{column_name: current_value}))[0]
+                    setattr(found_table, column_name, new_value)
+                    found_table.update()
                     await interaction.edit_original_response(
-                        content=f"`{new_value}` could not be converted to the field's data type, use `/schema` to "
-                                f"check the data type of the column before trying again."
+                        content=f"Successfully updated the value of **{column}** in **{table.name}**."
                     )
-            else:
+                else:
+                    await interaction.edit_original_response(
+                        content="The column does not exist."
+                    )
+            except ValidationError:
                 await interaction.edit_original_response(
-                    content="There is no table with that name, try creating a table."
+                    content=f"`{new_value}` could not be converted to the field's data type, use `/schema` to "
+                            f"check the data type of the column before trying again."
                 )
-        except Exception as e:
-            logger.exception(e)
+        else:
+            await interaction.edit_original_response(
+                content="There is no table with that name, try creating a table."
+            )
 
     @app_commands.command(
         description="Performs a left-join on two tables."
