@@ -87,6 +87,12 @@ class Table(BaseModel):
         msg = await self.__disco_cursor__.add_record(self)
         self.__disco_id__ = msg.id
 
+    def _ensure_written(self) -> None:
+        if self.__disco_id__ == -1:
+            raise DatabaseStorageError(
+                "this entry has not been written, did you mean to call save()?",  # noqa
+            )
+
     async def update(self) -> None:
         """
         Update the entry in-place.
@@ -110,14 +116,28 @@ class Table(BaseModel):
         """
 
         self._ensure_db()
+        self._ensure_written()
         assert self.__disco_cursor__
-        if self.__disco_id__ == -1:
-            raise DatabaseStorageError(
-                "this entry has not been written, did you mean to call save()?",  # noqa
-            )
         await self.__disco_cursor__.update_record(self)
 
-    async def commit(self) -> None: ...
+    async def commit(self) -> None:
+        """
+        Save the current entry, or update it if it already exists in the
+        database.
+        """
+        if self.__disco_id__ == -1:
+            await self.save()
+        else:
+            await self.update()
+
+    async def delete(self) -> None:
+        """
+        Delete the current entry from the database.
+        """
+
+        self._ensure_written()
+        assert self.__disco_cursor__
+        await self.__disco_cursor__.delete_record(self)
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:
