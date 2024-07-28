@@ -3,48 +3,20 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pkgutil import iter_modules
-from typing import Any, Coroutine, NoReturn, Type, TypeVar
+from typing import Coroutine, NoReturn, Type, TypeVar
 
 import discord
 from discord.ext import commands
 from loguru import logger
-from pydantic import (ValidationInfo, ValidatorFunctionWrapHandler,
-                      WrapValidator)
-from typing_extensions import Annotated
 
 from ._cursor import TableCursor
-from .exceptions import (DatabaseCorruptionError, DatabaseStorageError,
-                         DatabaseTableError, NotConnectedError)
+from .exceptions import (DatabaseCorruptionError, DatabaseTableError,
+                         NotConnectedError)
 from .table import Table
 
-__all__ = ("Database", "References")
+__all__ = ("Database",)
 
 T = TypeVar("T", bound=Type[Table])
-
-
-def _validate_ref(
-    value: Any,
-    handler: ValidatorFunctionWrapHandler,
-    info: ValidationInfo,
-) -> int:
-    print(info.mode, repr(value), info)
-    if info.mode == "json":
-        if not isinstance(value, int):
-            raise DatabaseCorruptionError("a")
-        return handler(value)
-
-    if not isinstance(value, Table):
-        raise DatabaseCorruptionError("b")
-
-    if value.__disco_id__ == -1:
-        raise DatabaseStorageError(
-            f"cannot store {value!r} as a reference, since it is not in the database"  # noqa
-        )
-
-    return value.__disco_id__
-
-
-References = Annotated[T, WrapValidator(_validate_ref)]
 
 
 class Database:
