@@ -31,7 +31,7 @@ class BookmarkBot(discord.Client):
 discord.utils.setup_logging()
 bot = BookmarkBot()
 
-async def main():
+async def main() -> None:
         async with db.conn(os.getenv("DB_BOT_TOKEN")):
             try:
                 await bot.start(os.getenv("BOOKMARK_BOT_TOKEN"))

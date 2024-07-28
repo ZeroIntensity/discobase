@@ -39,7 +39,7 @@ async def get(db: discobase.Database, interaction: discord.Interaction) -> list[
     """
     return await db.tables[models.BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id)
 
-async def remove(record: models.BookmarkedMessage):
+async def remove(record: models.BookmarkedMessage) -> None:
     """Remove a bookmark from the list.
 
     Args:
