@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from pkgutil import iter_modules
-from typing import Any, Coroutine, NoReturn, Type, TypeVar, Union
+from typing import Any, Coroutine, NoReturn, Type, TypeVar
 
 import discord
 from discord.ext import commands
