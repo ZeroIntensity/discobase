@@ -6,7 +6,7 @@ from discord.ext import commands
 from loguru import logger
 from pydantic import ValidationError
 
-from src.discobase.ui import embed as em
+from ..ui import embed as em
 
 
 class Utility(commands.Cog):

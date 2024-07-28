@@ -9,6 +9,8 @@ from discord.ext import commands
 from loguru import logger
 
 from ._cursor import TableCursor
+from .cogs.utility import Utility
+from .cogs.visualization import Visualization
 from .exceptions import (DatabaseCorruptionError, DatabaseTableError,
                          NotConnectedError)
 from .table import Table
@@ -80,6 +82,8 @@ class Database:
         @logger.catch(reraise=True)
         async def on_ready() -> None:
             try:
+                await self.bot.add_cog(Utility(self.bot))
+                await self.bot.add_cog(Visualization(self.bot))
                 await self.init()
             except BaseException as e:
                 await self.bot.close()
@@ -145,14 +149,6 @@ class Database:
         Generally, you don't want to call this manually, but
         this is considered to be a public interface.
         """
-        logger.info("Initializing the bot.")
-        # Load external commands
-        from .cogs.utility import Utility
-        from .cogs.visualization import Visualization
-
-        await self.bot.add_cog(Utility(self.bot))
-        await self.bot.add_cog(Visualization(self.bot))
-
         logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
         logger.info("Bot is ready!")

@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 
-from src.discobase.ui import embed as em
+from ..ui import embed as em
 
 
 class Visualization(commands.Cog):
