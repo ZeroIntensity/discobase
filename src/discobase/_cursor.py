@@ -318,7 +318,7 @@ class TableCursor:
         """
         last_message: discord.Message | None = None
         for _ in range(amount):
-            last_message = await index_channel.send("null")
+            last_message = await index_channel.send("null", silent=True)
 
         if not last_message:
             raise DatabaseCorruptionError("last_message is None somehow")
@@ -592,7 +592,7 @@ class TableCursor:
         main_table: discord.TextChannel = self._find_channel(
             metadata.table_channel
         )
-        message = await main_table.send(record_data.model_dump_json())
+        message = await main_table.send(record_data.model_dump_json(), silent=True)
 
         for field, value in record.model_dump().items():
             channel = self._find_channel(
@@ -912,7 +912,7 @@ class TableCursor:
         assert timestamp_snowflake is not None
         metadata.time_table = {timestamp_snowflake: (0, initial_size)}
         metadata.index_channels = index_channels
-        message = await self.metadata_channel.send(metadata.model_dump_json())
+        message = await self.metadata_channel.send(metadata.model_dump_json(), silent=True)
 
         table.__disco_cursor__ = self
         # Since Discord generates the message ID, we have to do these
