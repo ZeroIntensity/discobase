@@ -131,14 +131,34 @@ class Visualization(commands.Cog):
             view=view
         )
 
-    @app_commands.command(description="Displays general statistics for the selected table.")
-    @app_commands.describe(
-        channel="Choose the table you want to fetch statistics from."
+    @app_commands.command(
+        description="Displays the number of tables and the names of the tables."
     )
-    async def status(
-        self, interaction: discord.Interaction, channel: discord.TextChannel
+    async def tablestats(
+        self, interaction: discord.Interaction
     ) -> None:
-        pass
+        tables_names: list | None = None
+        tables_names = [table.name for table in self.bot.db.tables]
+        combined_tables_names = "\n".join(tables_names)
+
+        embed_gen = embed.EmbedFromContent(
+            title="Tables",
+            content="",
+            headers=None,
+            style=embed.EmbedStyle.DEFAULT,
+        ).create()
+
+        embed_gen.add_field(
+            name="Number of Tables",
+            value=len(self.bot.db.tables),
+        )
+
+        embed_gen.add_field(
+            name="Names of Tables",
+            value=combined_tables_names,
+        )
+
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(
         description="Retrieves and displays the schema for the table.",
