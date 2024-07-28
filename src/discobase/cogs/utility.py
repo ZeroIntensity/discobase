@@ -67,11 +67,7 @@ class Utility(commands.Cog):
             )
             return
 
-        try:
-            await new_entry.save()
-        except Exception as e:
-            logger.error(e)
-            return
+        await new_entry.save()
 
         await interaction.edit_original_response(
             content=f"I have inserted `{data}` into `{table_name}` table."
