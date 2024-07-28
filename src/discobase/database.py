@@ -23,7 +23,6 @@ __all__ = ("Database", "References")
 T = TypeVar("T", bound=Type[Table])
 
 
-
 def _validate_ref(
     value: Any,
     handler: ValidatorFunctionWrapHandler,
