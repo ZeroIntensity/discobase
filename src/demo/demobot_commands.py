@@ -19,7 +19,7 @@ class Bookmark(discord.app_commands.Group):
     @discord.app_commands.command(name="get_bookmarks", description="Retrieve all of your bookmarks")
     async def get_bookmarks(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        records = await db_interactions.get(self.bot, db, interaction)
+        records = await db_interactions.get(db, interaction)
         if len(records) == 0:
             await interaction.followup.send("You have not bookmarked any messages")
         else:

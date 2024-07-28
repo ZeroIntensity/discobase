@@ -7,5 +7,6 @@ import discobase
 class BookmarkedMessage(discobase.Table):
     user_id: int
     title: str
-    channel_id: int
-    message_id: int
+    author_name: str
+    author_avatar_url: str
+    message_content: str

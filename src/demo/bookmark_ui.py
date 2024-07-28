@@ -1,9 +1,10 @@
 import db_interactions
 import discord
+import models
 
 
-async def send_bookmark(interaction: discord.Interaction, message: discord.Message, title: str):
-    embed = build_bookmark_embed((title, message))
+async def send_bookmark(interaction: discord.Interaction, record: models.BookmarkedMessage):
+    embed = build_bookmark_embed(record=record)
     await interaction.followup.send(content="Successfully bookmarked the message", embed=embed, ephemeral=True)
 
 class BookmarkForm(discord.ui.Modal):
@@ -26,19 +27,19 @@ class BookmarkForm(discord.ui.Modal):
         """Sends the bookmark embed to the user with the newly chosen title."""
         title = self.bookmark_title.value or self.bookmark_title.default
         await interaction.response.defer(ephemeral=True)
-        await db_interactions.add(interaction, self.message, title)
-        await send_bookmark(interaction, self.message, title)
+        record = await db_interactions.add(interaction, self.message, title)
+        await send_bookmark(interaction, record)
 
 
-def build_bookmark_embed(record: list[tuple[str, discord.Message]]):
-        embed = discord.Embed(title=record[0], description=record[1].content, colour=0x68C290)
+def build_bookmark_embed(record: models.BookmarkedMessage):
+        embed = discord.Embed(title=record.title, description=record.message_content, colour=0x68C290)
         embed.set_author(
-            name=record[1].author.name,
-            icon_url= record[1].author.display_avatar.url
+            name=record.author_name,
+            icon_url=record.author_avatar_url
         )
         return embed
 
-def build_embeds_list(records: list[tuple[str, discord.Message]]) -> list[discord.Embed]:
+def build_embeds_list(records: list[models.BookmarkedMessage]) -> list[discord.Embed]:
         embeds: list[discord.Embed] = []
         for record in records:
             embed = build_bookmark_embed(record)
