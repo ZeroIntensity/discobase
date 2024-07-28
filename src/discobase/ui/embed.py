@@ -133,17 +133,16 @@ class EmbedFromContent:
         self.style = style
 
     def create(self) -> list[discord.Embed] | discord.Embed:
-        match self.style:
-            case "column":
-                return self._column_display()
-            case "table":
-                return self._table_display()
-            case "schema":
-                return self._schema_display()
-            case "default":
-                return self._default_display()
-            case _:
-                raise ValueError("Invalid style input.")
+        if self.style == "column":
+            return self._column_display()
+        elif self.style == "table":
+            return self._table_display()
+        elif self.style == "schema":
+            return self._schema_display()
+        elif self.style == "default":
+            return self._default_display()
+        else:
+            raise ValueError("Invalid style input.")
 
     def _column_display(self) -> list[discord.Embed]:
         """
