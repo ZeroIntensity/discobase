@@ -359,7 +359,8 @@ class TableCursor:
 
         if not last_message:
             raise DatabaseCorruptionError("last_message is None somehow")
-        last_timestamp = timedelta(seconds=1) + last_message.created_at
+        # 5 seconds, per the Discord ratelimit
+        last_timestamp = timedelta(seconds=5) + last_message.created_at
         return time_snowflake(last_timestamp)
 
     async def _resize_channel(
