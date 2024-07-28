@@ -15,7 +15,6 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
-from ._util import free_fly, gather_group
 from .exceptions import (DatabaseCorruptionError, DatabaseLookupError,
                          DatabaseStorageError)
 
@@ -182,7 +181,7 @@ class TableCursor:
         # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
         logger.debug(f"Editing message (ID {mid}) to {content}")
-        free_fly(editable_message.edit(content=content))
+        await editable_message.edit(content=content)
 
     def _to_index(self, value: int) -> int:
         """
@@ -347,19 +346,14 @@ class TableCursor:
         """
         last_message: discord.Message | None = None
 
-        async with gather_group() as group:
-            for _ in range(amount):
-                task = group.add(index_channel.send("null", silent=True))
-
-                def _cb(fut: asyncio.Task[discord.Message]):
-                    nonlocal last_message
-                    last_message = fut.result()
-
-                task.add_done_callback(_cb)
+        # Here be dragons: ratelimit makes gathering this actually worse.
+        for _ in range(amount):
+            last_message = await index_channel.send("null", silent=True)
 
         if not last_message:
             raise DatabaseCorruptionError("last_message is None somehow")
-        last_timestamp = timedelta(seconds=1) + last_message.created_at
+        # 5 seconds, per the Discord ratelimit
+        last_timestamp = timedelta(seconds=5) + last_message.created_at
         return time_snowflake(last_timestamp)
 
     async def _resize_channel(
@@ -395,121 +389,122 @@ class TableCursor:
                 del metadata.time_table[snowflake]
 
         metadata.time_table[timestamp_snowflake] = rng
-        async with gather_group() as group:
-            # Now, we have to move everything into the correct position.
-            #
-            # Note that this shouldn't put everything into memory, as
-            # each previous iteration will be freed -- this is good
-            # for scalability.
-            async for msg in channel.history(
-                limit=old_size,
-                oldest_first=True,
-            ):
-                # msg = await channel.fetch_message(msg.id)  # TODO: Remove this
-                record = _IndexableRecord.from_message(msg.content)
-                if not record:
-                    continue
+        # Now, we have to move everything into the correct position.
+        #
+        # Note that this shouldn't put everything into memory, as
+        # each previous iteration will be freed -- this is good
+        # for scalability.
+        #
+        # Due to Discord's ratelimit, gathering the coros in this loop
+        # is actually a bad idea.
+        async for msg in channel.history(
+            limit=old_size,
+            oldest_first=True,
+        ):
+            # msg = await channel.fetch_message(msg.id)
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
 
-                new_index: int = self._to_index(record.key)
-                target = await self._lookup_message(
-                    channel,
-                    new_index,
-                )
+            new_index: int = self._to_index(record.key)
+            target = await self._lookup_message(
+                channel,
+                new_index,
+            )
 
-                next_record = _IndexableRecord.from_message(target.content)
-                inplace: bool = True
-                overwrite: bool = True
+            next_record = _IndexableRecord.from_message(target.content)
+            inplace: bool = True
+            overwrite: bool = True
 
-                if next_record:
-                    if next_record.next_value:
-                        logger.info("Hash collision in resize!")
-                        target = await self._find_collision_message(
-                            channel,
-                            new_index,
-                        )
-                        # `inplace` is True, so we fall
-                        # through to the inplace edit.
-                        #
-                        # To be fair, I'm not too sure if this is
-                        # the best approach, this might be worth
-                        # refactoring in the future.
-                    else:
-                        logger.info("Updating record at the new index.")
-                        inplace = False
-                        logger.debug(
-                            f"{next_record} marked as the next value location ({target.id=})"  # noqa
-                        )
-
-                        if record.next_value:
-                            record.next_value = None
-                            # Here be dragons: if we overwrite the `next_value`
-                            # with `None` to prevent a doubly-nested copy in
-                            # the JSON, we have to mark this message to *not*
-                            # be overwritten, otherwise we lose that data.
-                            overwrite = False
-
-                        next_record.next_value = record
-                        content = next_record.model_dump_json()
-                        logger.debug(f"Editing {target.content} to {content}")
-                        group.add(target.edit(content=content))
-
-                if inplace:
-                    # In case of a hash collision, we want to mark
-                    # this as having a `next_value`, so it doesn't get
-                    # overwritten.
+            if next_record:
+                if next_record.next_value:
+                    logger.info("Hash collision in resize!")
+                    target = await self._find_collision_message(
+                        channel,
+                        new_index,
+                    )
+                    # `inplace` is True, so we fall
+                    # through to the inplace edit.
                     #
-                    # We copy this to prevent a recursive model dump.
+                    # To be fair, I'm not too sure if this is
+                    # the best approach, this might be worth
+                    # refactoring in the future.
+                else:
+                    logger.info("Updating record at the new index.")
+                    inplace = False
+                    logger.debug(
+                        f"{next_record} marked as the next value location ({target.id=})"  # noqa
+                    )
+
                     if record.next_value:
                         record.next_value = None
+                        # Here be dragons: if we overwrite the `next_value`
+                        # with `None` to prevent a doubly-nested copy in
+                        # the JSON, we have to mark this message to *not*
+                        # be overwritten, otherwise we lose that data.
                         overwrite = False
 
-                    copy = record.model_copy()
-                    copy.next_value = record
-                    logger.info(
-                        "Target index does not have an entry, updating in-place."  # noqa
-                    )
-                    content = copy.model_dump_json()
-                    logger.debug(f"Editing in-place null to {content}")
-                    assert target.content == "null"
-                    group.add(target.edit(content=content))
+                    next_record.next_value = record
+                    content = next_record.model_dump_json()
+                    logger.debug(f"Editing {target.content} to {content}")
+                    await target.edit(content=content)
 
-                # Technically speaking, the index could
-                # remain the same. We need to check for that.
-                if (not record.next_value) and (target != msg) and overwrite:
-                    group.add(msg.edit(content="null"))
+            if inplace:
+                # In case of a hash collision, we want to mark
+                # this as having a `next_value`, so it doesn't get
+                # overwritten.
+                #
+                # We copy this to prevent a recursive model dump.
+                if record.next_value:
+                    record.next_value = None
+                    overwrite = False
 
-        async with gather_group() as group:
-            # Finally, all the next_value attributes have been set, we can
-            # go through and update each record.
-            #
-            # The overall algorithm is O(2n), but it's much more scalable
-            # than trying to put the entire table into memory in order to
-            # resize it.
-            #
-            # This algorithm is pretty much infinitely scalable
-            # in terms of memory, but we're limited by Discord's ratelimit.
-            async for msg in channel.history(
-                limit=metadata.max_records,
-                oldest_first=True,
-            ):
-                record = _IndexableRecord.from_message(msg.content)
-                if not record:
-                    continue
+                copy = record.model_copy()
+                copy.next_value = record
+                logger.info(
+                    "Target index does not have an entry, updating in-place."  # noqa
+                )
+                content = copy.model_dump_json()
+                logger.debug(f"Editing in-place null to {content}")
+                assert target.content == "null"
+                await target.edit(content=content)
 
-                logger.debug(f"Handling movement of {record!r}")
-                if not record.next_value:
-                    raise DatabaseCorruptionError(
-                        "all existing records after resize should have next_value",  # noqa
-                    )
+            # Technically speaking, the index could
+            # remain the same. We need to check for that.
+            if (not record.next_value) and (target != msg) and overwrite:
+                await msg.edit(content="null")
 
-                if record.next_value.next_value:
-                    raise DatabaseCorruptionError(
-                        f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
-                    )
+        # Finally, all the next_value attributes have been set, we can
+        # go through and update each record.
+        #
+        # The overall algorithm is O(2n), but it's much more scalable
+        # than trying to put the entire table into memory in order to
+        # resize it.
+        #
+        # This algorithm is pretty much infinitely scalable
+        # in terms of memory, but we're limited by Discord's ratelimit.
+        async for msg in channel.history(
+            limit=metadata.max_records,
+            oldest_first=True,
+        ):
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
 
-                content = record.next_value.model_dump_json()
-                logger.debug(f"Replacing {msg.content} with {content}")
-                group.add(msg.edit(content=content))
+            logger.debug(f"Handling movement of {record!r}")
+            if not record.next_value:
+                raise DatabaseCorruptionError(
+                    "all existing records after resize should have next_value",  # noqa
+                )
+
+            if record.next_value.next_value:
+                raise DatabaseCorruptionError(
+                    f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
+                )
+
+            content = record.next_value.model_dump_json()
+            logger.debug(f"Replacing {msg.content} with {content}")
+            await msg.edit(content=content)
 
     async def _resize_table(self) -> None:
         """
@@ -635,20 +630,17 @@ class TableCursor:
             record_data.model_dump_json(), silent=True
         )
 
-        async with gather_group() as group:
-            for field, value in record.model_dump().items():
-                channel = self._find_channel(
-                    metadata.index_channels[f"{record.__disco_name__}_{field}"]
-                )
-                hashed_field, target_index = self._as_hashed(value)
-                group.add(
-                    self._write_index_record(
-                        channel,
-                        target_index,
-                        hashed_field,
-                        message.id,
-                    )
-                )
+        for field, value in record.model_dump().items():
+            channel = self._find_channel(
+                metadata.index_channels[f"{record.__disco_name__}_{field}"]
+            )
+            hashed_field, target_index = self._as_hashed(value)
+            await self._write_index_record(
+                channel,
+                target_index,
+                hashed_field,
+                message.id,
+            )
 
         return await message.edit(content=record_data.model_dump_json())
 
@@ -674,69 +666,54 @@ class TableCursor:
         current = _Record.model_validate_json(msg.content).decode_content(
             record
         )
-        task = free_fly(
-            msg.edit(content=_Record.from_data(record).model_dump_json())
-        )
+        await msg.edit(content=_Record.from_data(record).model_dump_json())
 
-        async with gather_group() as group:
-            for new, old in zip(
-                record.model_dump().items(),
-                current.model_dump().items(),
-            ):
-                field = new[0]
-                if field != old[0]:
-                    raise DatabaseCorruptionError(
-                        f"field name {field} does not match {old[0]}"
-                    )
-
-                new_value = new[1]
-                old_value = old[1]
-                if new_value == old_value:
-                    logger.info("Nothing changed.")
-                    continue
-
-                channel = self._find_channel(
-                    metadata.index_channels[f"{record.__disco_name__}_{field}"]
-                )
-                hashed_field, target_index = self._as_hashed(new_value)
-                group.add(
-                    self._write_index_record(
-                        channel,
-                        target_index,
-                        hashed_field,
-                        msg.id,
-                    )
+        for new, old in zip(
+            record.model_dump().items(),
+            current.model_dump().items(),
+        ):
+            field = new[0]
+            if field != old[0]:
+                raise DatabaseCorruptionError(
+                    f"field name {field} does not match {old[0]}"
                 )
 
-                old_index = self._to_index(self._hash(old_value))
-                old_msg_task = group.add(
-                    self._lookup_message(channel, old_index)
+            new_value = new[1]
+            old_value = old[1]
+            if new_value == old_value:
+                logger.info("Nothing changed.")
+                continue
+
+            channel = self._find_channel(
+                metadata.index_channels[f"{record.__disco_name__}_{field}"]
+            )
+            hashed_field, target_index = self._as_hashed(new_value)
+            await self._write_index_record(
+                channel,
+                target_index,
+                hashed_field,
+                msg.id,
+            )
+
+            old_index = self._to_index(self._hash(old_value))
+            old_msg = await self._lookup_message(channel, old_index)
+            old_record = _IndexableRecord.from_message(old_msg.content)
+            if not old_record:
+                raise DatabaseCorruptionError(
+                    "got null record somehow",
                 )
 
-                def _cb(fut: asyncio.Task[discord.Message]):
-                    old_msg = fut.result()
-                    old_record = _IndexableRecord.from_message(old_msg.content)
-                    if not old_record:
-                        raise DatabaseCorruptionError(
-                            "got null record somehow",
-                        )
+            if len(old_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
+                await old_msg.edit(content="null")
+                self.metadata.current_records -= 1
+            else:
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
+                old_record.record_ids.remove(msg.id)
+                await old_msg.edit(content=old_record.model_dump_json())
 
-                    if len(old_record.record_ids) == 1:
-                        logger.info("We can nullify this entry.")
-                        group.add(old_msg.edit(content="null"))
-                        self.metadata.current_records -= 1
-                    else:
-                        logger.info(
-                            "There are other entries with this value, only remove this ID."  # noqa
-                        )
-                        old_record.record_ids.remove(msg.id)
-                        group.add(
-                            old_msg.edit(content=old_record.model_dump_json())
-                        )
-
-                old_msg_task.add_done_callback(_cb)
-
-        await task  # Ensure that it's done
         return msg
 
     async def find_records(
@@ -761,78 +738,61 @@ class TableCursor:
         sets_list: list[set[int]] = []
 
         logger.debug(f"Looking for query {query!r} in {name}")
-        async with gather_group() as group:
-            for field, value in query.items():
-                if field not in metadata.keys:
-                    raise DatabaseLookupError(
-                        f"table {metadata.name} has no field {field}"
-                    )
-
-                channel = self._find_channel(
-                    metadata.index_channels[f"{name}_{field}"]
+        for field, value in query.items():
+            if field not in metadata.keys:
+                raise DatabaseLookupError(
+                    f"table {metadata.name} has no field {field}"
                 )
 
-                hashed_field, target_index = self._as_hashed(value)
-                entry_message_task = group.add(
-                    self._lookup_message(
-                        channel,
-                        target_index,
-                    )
+            channel = self._find_channel(
+                metadata.index_channels[f"{name}_{field}"]
+            )
+
+            hashed_field, target_index = self._as_hashed(value)
+            entry_message = await self._lookup_message(
+                channel,
+                target_index,
+            )
+
+            serialized_content = _IndexableRecord.from_message(
+                entry_message.content
+            )
+
+            if not serialized_content:
+                logger.info("Nothing was found.")
+                continue
+
+            if serialized_content.key == hashed_field:
+                logger.debug(f"Key matches hash! {serialized_content}")
+                sets_list.append(set(serialized_content.record_ids))
+            else:
+                # Hash collision!
+                def find_hash(message: str | None) -> bool:
+                    if not message:
+                        return False
+
+                    index_record = _IndexableRecord.from_message(message)
+                    if not index_record:
+                        return False
+
+                    return index_record.key == hashed_field
+
+                entry = await self._find_collision_message(
+                    channel,
+                    target_index,
+                    search_func=find_hash,
                 )
 
-                def _entry_message_cb(fut: asyncio.Task[discord.Message]):
-                    entry_message = fut.result()
-                    serialized_content = _IndexableRecord.from_message(
-                        entry_message.content
+                rec = _IndexableRecord.from_message(entry.content)
+                logger.debug(f"Found hash collision index entry: {rec}")  # noqa
+                if not rec:
+                    # This shouldn't be possible, considering the
+                    # search function explicitly disallows that.
+                    raise DatabaseCorruptionError(
+                        "search function found null entry somehow"
                     )
 
-                    if not serialized_content:
-                        logger.info("Nothing was found.")
-                        return
-
-                    if serialized_content.key == hashed_field:
-                        logger.debug(f"Key matches hash! {serialized_content}")
-                        sets_list.append(set(serialized_content.record_ids))
-                    else:
-                        # Hash collision!
-                        def find_hash(message: str | None) -> bool:
-                            if not message:
-                                return False
-
-                            index_record = _IndexableRecord.from_message(
-                                message
-                            )
-                            if not index_record:
-                                return False
-
-                            return index_record.key == hashed_field
-
-                        entry_task = group.add(
-                            self._find_collision_message(
-                                channel,
-                                target_index,
-                                search_func=find_hash,
-                            )
-                        )
-
-                        def _cb(fut: asyncio.Task[discord.Message]):
-                            entry = fut.result()
-                            rec = _IndexableRecord.from_message(entry.content)
-                            logger.debug(
-                                f"Found hash collision index entry: {rec}"
-                            )  # noqa
-                            if not rec:
-                                # This shouldn't be possible, considering the
-                                # search function explicitly disallows that.
-                                raise DatabaseCorruptionError(
-                                    "search function found null entry somehow"
-                                )
-
-                            sets_list.append(set(rec.record_ids))
-
-                        entry_task.add_done_callback(_cb)
-
-                entry_message_task.add_done_callback(_entry_message_cb)
+                sets_list.append(set(rec.record_ids))
 
         if not query:
             logger.info("Query is empty, finding all entries!")
@@ -850,19 +810,13 @@ class TableCursor:
         logger.debug(f"Got IDs: {sets_list}")
         records: list[Table] = []
 
-        async with gather_group() as group:
-            for record_ids in sets_list:
-                for record_id in record_ids:
-                    task = group.add(main_table.fetch_message(record_id))
-
-                    def _cb(fut: asyncio.Task[discord.Message]):
-                        message = fut.result()
-                        record = _Record.model_validate_json(message.content)
-                        entry = record.decode_content(table)
-                        entry.__disco_id__ = message.id
-                        records.append(entry)
-
-                    task.add_done_callback(_cb)
+        for record_ids in sets_list:
+            for record_id in record_ids:
+                message = await main_table.fetch_message(record_id)
+                record = _Record.model_validate_json(message.content)
+                entry = record.decode_content(table)
+                entry.__disco_id__ = message.id
+                records.append(entry)
 
         return records
 
