@@ -167,6 +167,7 @@ async def test_long_resize(database: discobase.Database):
 #     assert len(await Whatever.find()) == 0
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_delete(database: discobase.Database):
     @database.table
     class DeleteTest(discobase.Table):

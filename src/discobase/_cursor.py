@@ -210,7 +210,7 @@ class TableCursor:
             value: Any discobase-hashable object.
 
         Returns:
-            int: An integer, positive or negative, representing the unique hash.
+            int: An integer, positive or negative, representing a unique hash.
             This is always the same thing across programs.
         """
         logger.debug(f"Hashing object: {value!r}")
@@ -359,86 +359,87 @@ class TableCursor:
                 del metadata.time_table[snowflake]
 
         metadata.time_table[timestamp_snowflake] = rng
-        # Now, we have to move everything into the correct position.
-        #
-        # Note that this shouldn't put everything into memory, as
-        # each previous iteration will be freed -- this is good
-        # for scalability.
-        async for msg in channel.history(
-            limit=old_size,
-            oldest_first=True,
-        ):
-            msg = await channel.fetch_message(msg.id)  # TODO: Remove this
-            record = _IndexableRecord.from_message(msg.content)
-            if not record:
-                continue
+        async with gather_group() as group:
+            # Now, we have to move everything into the correct position.
+            #
+            # Note that this shouldn't put everything into memory, as
+            # each previous iteration will be freed -- this is good
+            # for scalability.
+            async for msg in channel.history(
+                limit=old_size,
+                oldest_first=True,
+            ):
+                msg = await channel.fetch_message(msg.id)  # TODO: Remove this
+                record = _IndexableRecord.from_message(msg.content)
+                if not record:
+                    continue
 
-            new_index: int = self._to_index(record.key)
-            target = await self._lookup_message(
-                channel,
-                new_index,
-            )
-            next_record = _IndexableRecord.from_message(target.content)
-            inplace: bool = True
-            overwrite: bool = True
+                new_index: int = self._to_index(record.key)
+                target = await self._lookup_message(
+                    channel,
+                    new_index,
+                )
+                next_record = _IndexableRecord.from_message(target.content)
+                inplace: bool = True
+                overwrite: bool = True
 
-            if next_record:
-                if next_record.next_value:
-                    logger.info("Hash collision in resize!")
-                    target = await self._find_collision_message(
-                        channel,
-                        new_index,
-                    )
-                    # `inplace` is True, so we fall
-                    # through to the inplace edit.
+                if next_record:
+                    if next_record.next_value:
+                        logger.info("Hash collision in resize!")
+                        target = await self._find_collision_message(
+                            channel,
+                            new_index,
+                        )
+                        # `inplace` is True, so we fall
+                        # through to the inplace edit.
+                        #
+                        # To be fair, I'm not too sure if this is
+                        # the best approach, this might be worth
+                        # refactoring in the future.
+                    else:
+                        logger.info("Updating record at the new index.")
+                        inplace = False
+                        logger.debug(
+                            f"{next_record} marked as the next value location ({target.id=})"  # noqa
+                        )
+
+                        if record.next_value:
+                            record.next_value = None
+                            # Here be dragons: if we overwrite the `next_value`
+                            # with `None` to prevent a doubly-nested copy in the
+                            # JSON, we have to mark this message to *not* be
+                            # overwritten, otherwise we lose that data.
+                            overwrite = False
+
+                        next_record.next_value = record
+                        content = next_record.model_dump_json()
+                        logger.debug(f"Editing {target.content} to {content}")
+                        group.add(target.edit(content=content))
+
+                if inplace:
+                    # In case of a hash collision, we want to mark
+                    # this as having a `next_value`, so it doesn't get
+                    # overwritten.
                     #
-                    # To be fair, I'm not too sure if this is
-                    # the best approach, this might be worth
-                    # refactoring in the future.
-                else:
-                    logger.info("Updating record at the new index.")
-                    inplace = False
-                    logger.debug(
-                        f"{next_record} marked as the next value location ({target.id=})"  # noqa
-                    )
-
+                    # We copy this to prevent a recursive model dump.
                     if record.next_value:
                         record.next_value = None
-                        # Here be dragons: if we overwrite the `next_value`
-                        # with `None` to prevent a doubly-nested copy in the
-                        # JSON, we have to mark this message to *not* be
-                        # overwritten, otherwise we lose that data.
                         overwrite = False
 
-                    next_record.next_value = record
-                    content = next_record.model_dump_json()
-                    logger.debug(f"Editing {target.content} to {content}")
-                    await target.edit(content=content)
+                    copy = record.model_copy()
+                    copy.next_value = record
+                    logger.info(
+                        "Target index does not have an entry, updating in-place."
+                    )
+                    content = copy.model_dump_json()
+                    logger.debug(f"Editing in-place null to {content}")
+                    assert target.content == "null"
+                    group.add(target.edit(content=content))
 
-            if inplace:
-                # In case of a hash collision, we want to mark
-                # this as having a `next_value`, so it doesn't get
-                # overwritten.
-                #
-                # We copy this to prevent a recursive model dump.
-                if record.next_value:
-                    record.next_value = None
-                    overwrite = False
-
-                copy = record.model_copy()
-                copy.next_value = record
-                logger.info(
-                    "Target index does not have an entry, updating in-place."
-                )
-                content = copy.model_dump_json()
-                logger.debug(f"Editing in-place null to {content}")
-                assert target.content == "null"
-                await target.edit(content=content)
-
-            # Technically speaking, the index could
-            # remain the same. We need to check for that.
-            if (not record.next_value) and (target != msg) and overwrite:
-                await msg.edit(content="null")
+                # Technically speaking, the index could
+                # remain the same. We need to check for that.
+                if (not record.next_value) and (target != msg) and overwrite:
+                    group.add(msg.edit(content="null"))
 
         async with gather_group() as group:
             # Finally, all the next_value attributes have been set, we can
@@ -593,7 +594,9 @@ class TableCursor:
         main_table: discord.TextChannel = self._find_channel(
             metadata.table_channel
         )
-        message = await main_table.send(record_data.model_dump_json(), silent=True)
+        message = await main_table.send(
+            record_data.model_dump_json(), silent=True
+        )
 
         async with gather_group() as group:
             for field, value in record.model_dump().items():
@@ -918,7 +921,9 @@ class TableCursor:
         assert timestamp_snowflake is not None
         metadata.time_table = {timestamp_snowflake: (0, initial_size)}
         metadata.index_channels = index_channels
-        message = await self.metadata_channel.send(metadata.model_dump_json(), silent=True)
+        message = await self.metadata_channel.send(
+            metadata.model_dump_json(), silent=True
+        )
 
         table.__disco_cursor__ = self
         # Since Discord generates the message ID, we have to do these
