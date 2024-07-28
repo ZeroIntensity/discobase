@@ -26,7 +26,7 @@ class Visualization(commands.Cog):
         interaction: discord.Interaction,
         name: discord.TextChannel
     ) -> None:
-        logger.debug("Table cmd initialized.")
+        logger.debug("Table slash cmd initialized.")
         await interaction.response.send_message(
             content=f"Searching for table `{name}`..."
         )
@@ -88,7 +88,7 @@ class Visualization(commands.Cog):
         table: discord.TextChannel,
         name: str,
     ) -> None:
-        logger.debug("Column cmd initialized.")
+        logger.debug("Column slash cmd initialized.")
         await interaction.response.send_message(
             f"Searching for table `{table.name}`..."
         )
@@ -181,6 +181,7 @@ class Visualization(commands.Cog):
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
+        logger.debug("Schema slash cmd initialized.")
         await interaction.response.send_message(
             content=f"Getting schema for {table.name}..."
         )
