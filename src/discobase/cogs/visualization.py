@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 
-from src.discobase.ui import embed
+from src.discobase.ui import embed as em
 
 
 class Visualization(commands.Cog):
@@ -61,15 +61,15 @@ class Visualization(commands.Cog):
             for col in table_columns:
                 data[col].append(getattr(game, col))
 
-        embed_from_content = embed.EmbedFromContent(
+        embed_from_content = em.EmbedFromContent(
             title=f"Table: {table.__disco_name__.title()}",
             content=data,
             headers=table_columns,
-            style=embed.EmbedStyle.TABLE
+            style=em.EmbedStyle.TABLE
         )
         embeds = embed_from_content.create()
 
-        view = embed.ArrowButtons(content=embeds)
+        view = em.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
             content="",
@@ -116,14 +116,14 @@ class Visualization(commands.Cog):
         table_records = await col_table.find()
         column_values = [getattr(record, column) for record in table_records]
 
-        embeds = embed.EmbedFromContent(
+        embeds = em.EmbedFromContent(
             title=f"Column `{name.title()}` from Table `{col_table.__disco_name__.title()}`",
             content=column_values,
             headers=None,
-            style=embed.EmbedStyle.COLUMN
+            style=em.EmbedStyle.COLUMN
         ).create()
 
-        view = embed.ArrowButtons(content=embeds)
+        view = em.ArrowButtons(content=embeds)
 
         await interaction.edit_original_response(
             content="",
@@ -137,28 +137,40 @@ class Visualization(commands.Cog):
     async def tablestats(
         self, interaction: discord.Interaction
     ) -> None:
-        tables_names: list | None = None
-        tables_names = [table.name for table in self.bot.db.tables]
-        combined_tables_names = "\n".join(tables_names)
-
-        embed_gen = embed.EmbedFromContent(
-            title="Tables",
-            content="",
-            headers=None,
-            style=embed.EmbedStyle.DEFAULT,
-        ).create()
-
-        embed_gen.add_field(
-            name="Number of Tables",
-            value=len(self.bot.db.tables),
+        logger.debug("Tablestats slash cmd initialized.")
+        await interaction.response.send_message(
+            content="Getting table statistics..."
         )
+        try:
+            tables_names: list | None = None
+            tables_names = [table for table in self.db.tables]
+            logger.debug(tables_names)
+            combined_tables_names = "\n".join(tables_names)
 
-        embed_gen.add_field(
-            name="Names of Tables",
-            value=combined_tables_names,
-        )
+            embed_gen = em.EmbedFromContent(
+                title="Tables",
+                content=[],
+                headers=None,
+                style=em.EmbedStyle.DEFAULT,
+            ).create()
 
-        await interaction.response.send_message(embed=embed)
+            embed_gen.add_field(
+                name="Number of Tables",
+                value=len(self.db.tables),
+            )
+
+            embed_gen.add_field(
+                name="Names of Tables",
+                value=combined_tables_names,
+            )
+
+            await interaction.edit_original_response(
+                content="",
+                embed=embed_gen
+            )
+        except Exception as e:
+            logger.exception(e)
+            return
 
     @app_commands.command(
         description="Retrieves and displays the schema for the table.",
@@ -174,16 +186,16 @@ class Visualization(commands.Cog):
         schemas: list[dict] | None = None
         embed_gen: discord.Embed | None = None
 
-        if table.name in self.bot.db.tables:
-            table_info = self.bot.db.tables[table.name]
+        if table.name in self.db.tables:
+            table_info = self.db.tables[table.name]
             table_schema = table_info.model_json_schema()
             schemas = [table_schema["properties"][disco_key] for disco_key in table_info.__disco_keys__]
 
-            embed_gen = embed.EmbedFromContent(
+            embed_gen = em.EmbedFromContent(
                 title=f"Table: {table.name.title()}",
                 content=schemas,
                 headers=None,
-                style=embed.EmbedStyle.SCHEMA,
+                style=em.EmbedStyle.SCHEMA,
             ).create()
 
             await interaction.response.send_message(embed=embed_gen)
