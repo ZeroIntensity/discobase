@@ -395,121 +395,122 @@ class TableCursor:
                 del metadata.time_table[snowflake]
 
         metadata.time_table[timestamp_snowflake] = rng
-        async with gather_group() as group:
-            # Now, we have to move everything into the correct position.
-            #
-            # Note that this shouldn't put everything into memory, as
-            # each previous iteration will be freed -- this is good
-            # for scalability.
-            async for msg in channel.history(
-                limit=old_size,
-                oldest_first=True,
-            ):
-                # msg = await channel.fetch_message(msg.id)
-                record = _IndexableRecord.from_message(msg.content)
-                if not record:
-                    continue
+        # Now, we have to move everything into the correct position.
+        #
+        # Note that this shouldn't put everything into memory, as
+        # each previous iteration will be freed -- this is good
+        # for scalability.
+        #
+        # Due to Discord's ratelimit, gathering the coros in this loop
+        # is actually a bad idea.
+        async for msg in channel.history(
+            limit=old_size,
+            oldest_first=True,
+        ):
+            # msg = await channel.fetch_message(msg.id)
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
 
-                new_index: int = self._to_index(record.key)
-                target = await self._lookup_message(
-                    channel,
-                    new_index,
-                )
+            new_index: int = self._to_index(record.key)
+            target = await self._lookup_message(
+                channel,
+                new_index,
+            )
 
-                next_record = _IndexableRecord.from_message(target.content)
-                inplace: bool = True
-                overwrite: bool = True
+            next_record = _IndexableRecord.from_message(target.content)
+            inplace: bool = True
+            overwrite: bool = True
 
-                if next_record:
-                    if next_record.next_value:
-                        logger.info("Hash collision in resize!")
-                        target = await self._find_collision_message(
-                            channel,
-                            new_index,
-                        )
-                        # `inplace` is True, so we fall
-                        # through to the inplace edit.
-                        #
-                        # To be fair, I'm not too sure if this is
-                        # the best approach, this might be worth
-                        # refactoring in the future.
-                    else:
-                        logger.info("Updating record at the new index.")
-                        inplace = False
-                        logger.debug(
-                            f"{next_record} marked as the next value location ({target.id=})"  # noqa
-                        )
-
-                        if record.next_value:
-                            record.next_value = None
-                            # Here be dragons: if we overwrite the `next_value`
-                            # with `None` to prevent a doubly-nested copy in
-                            # the JSON, we have to mark this message to *not*
-                            # be overwritten, otherwise we lose that data.
-                            overwrite = False
-
-                        next_record.next_value = record
-                        content = next_record.model_dump_json()
-                        logger.debug(f"Editing {target.content} to {content}")
-                        group.add(target.edit(content=content))
-
-                if inplace:
-                    # In case of a hash collision, we want to mark
-                    # this as having a `next_value`, so it doesn't get
-                    # overwritten.
+            if next_record:
+                if next_record.next_value:
+                    logger.info("Hash collision in resize!")
+                    target = await self._find_collision_message(
+                        channel,
+                        new_index,
+                    )
+                    # `inplace` is True, so we fall
+                    # through to the inplace edit.
                     #
-                    # We copy this to prevent a recursive model dump.
+                    # To be fair, I'm not too sure if this is
+                    # the best approach, this might be worth
+                    # refactoring in the future.
+                else:
+                    logger.info("Updating record at the new index.")
+                    inplace = False
+                    logger.debug(
+                        f"{next_record} marked as the next value location ({target.id=})"  # noqa
+                    )
+
                     if record.next_value:
                         record.next_value = None
+                        # Here be dragons: if we overwrite the `next_value`
+                        # with `None` to prevent a doubly-nested copy in
+                        # the JSON, we have to mark this message to *not*
+                        # be overwritten, otherwise we lose that data.
                         overwrite = False
 
-                    copy = record.model_copy()
-                    copy.next_value = record
-                    logger.info(
-                        "Target index does not have an entry, updating in-place."  # noqa
-                    )
-                    content = copy.model_dump_json()
-                    logger.debug(f"Editing in-place null to {content}")
-                    assert target.content == "null"
-                    group.add(target.edit(content=content))
+                    next_record.next_value = record
+                    content = next_record.model_dump_json()
+                    logger.debug(f"Editing {target.content} to {content}")
+                    await target.edit(content=content)
 
-                # Technically speaking, the index could
-                # remain the same. We need to check for that.
-                if (not record.next_value) and (target != msg) and overwrite:
-                    group.add(msg.edit(content="null"))
+            if inplace:
+                # In case of a hash collision, we want to mark
+                # this as having a `next_value`, so it doesn't get
+                # overwritten.
+                #
+                # We copy this to prevent a recursive model dump.
+                if record.next_value:
+                    record.next_value = None
+                    overwrite = False
 
-        async with gather_group() as group:
-            # Finally, all the next_value attributes have been set, we can
-            # go through and update each record.
-            #
-            # The overall algorithm is O(2n), but it's much more scalable
-            # than trying to put the entire table into memory in order to
-            # resize it.
-            #
-            # This algorithm is pretty much infinitely scalable
-            # in terms of memory, but we're limited by Discord's ratelimit.
-            async for msg in channel.history(
-                limit=metadata.max_records,
-                oldest_first=True,
-            ):
-                record = _IndexableRecord.from_message(msg.content)
-                if not record:
-                    continue
+                copy = record.model_copy()
+                copy.next_value = record
+                logger.info(
+                    "Target index does not have an entry, updating in-place."  # noqa
+                )
+                content = copy.model_dump_json()
+                logger.debug(f"Editing in-place null to {content}")
+                assert target.content == "null"
+                await target.edit(content=content)
 
-                logger.debug(f"Handling movement of {record!r}")
-                if not record.next_value:
-                    raise DatabaseCorruptionError(
-                        "all existing records after resize should have next_value",  # noqa
-                    )
+            # Technically speaking, the index could
+            # remain the same. We need to check for that.
+            if (not record.next_value) and (target != msg) and overwrite:
+                await msg.edit(content="null")
 
-                if record.next_value.next_value:
-                    raise DatabaseCorruptionError(
-                        f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
-                    )
+        # Finally, all the next_value attributes have been set, we can
+        # go through and update each record.
+        #
+        # The overall algorithm is O(2n), but it's much more scalable
+        # than trying to put the entire table into memory in order to
+        # resize it.
+        #
+        # This algorithm is pretty much infinitely scalable
+        # in terms of memory, but we're limited by Discord's ratelimit.
+        async for msg in channel.history(
+            limit=metadata.max_records,
+            oldest_first=True,
+        ):
+            record = _IndexableRecord.from_message(msg.content)
+            if not record:
+                continue
 
-                content = record.next_value.model_dump_json()
-                logger.debug(f"Replacing {msg.content} with {content}")
-                group.add(msg.edit(content=content))
+            logger.debug(f"Handling movement of {record!r}")
+            if not record.next_value:
+                raise DatabaseCorruptionError(
+                    "all existing records after resize should have next_value",  # noqa
+                )
+
+            if record.next_value.next_value:
+                raise DatabaseCorruptionError(
+                    f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
+                )
+
+            content = record.next_value.model_dump_json()
+            logger.debug(f"Replacing {msg.content} with {content}")
+            await msg.edit(content=content)
 
     async def _resize_table(self) -> None:
         """
