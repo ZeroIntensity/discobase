@@ -39,14 +39,11 @@ async def get(db: discobase.Database, interaction: discord.Interaction) -> list[
     """
     return await db.tables[models.BookmarkedMessage.__name__.lower()].find(user_id = interaction.user.id)
 
-async def remove(db: discobase.Database, user: discord.User, mid: discord.Message.id):
+async def remove(record: models.BookmarkedMessage):
     """Remove a bookmark from the list.
 
     Args:
-        user (discord.User): The user to remove the bookmark from.
-        mid (discord.Message.id): The message ID of the bookmarked message. The owner of the message must be the user passed in.
-
-    Returns:
-        tuple[Result]: The Result (see Result Enum). Will return FAILURE if the user is not the owner of the message.
+        db: discobase database instance.
+        record: the record to delete
     """
-    pass
+    await record.delete()

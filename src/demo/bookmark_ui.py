@@ -54,10 +54,10 @@ def build_error_embed(embed_content: str):
 
 
 class ArrowButtons(discord.ui.View):
-    def __init__(self, content: list[discord.Embed]) -> None:
+    def __init__(self, records: list[models.BookmarkedMessage]) -> None:
         super().__init__(timeout=None)
-        self.value = None
-        self.content = content
+        self.records = records
+        self.content = build_embeds_list(records)
         self.position = 0
         self.pages = len(self.content)
         self.on_ready()
@@ -100,6 +100,32 @@ class ArrowButtons(discord.ui.View):
 
         # update discord message
         await interaction.response.edit_message(embed=self.content[self.position], view=self)
+
+    @discord.ui.button(label='🗑', style=discord.ButtonStyle.danger, custom_id='del_button')
+    async def delete(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        """Controls the delete button on the qotd list embed"""
+
+        # current position is used for deletion of reords
+        current_position = self.position
+
+        # remove the embed from the message
+        self.content.remove(self.content[current_position])
+        self.pages = len(self.content)
+
+        await db_interactions.remove(self.records[current_position]) # This is causing some errors to check in the morning
+        self.records.remove(self.records[current_position])
+
+        # Only change position if the deleted item is not the first one
+        if self.position == 0:
+            self.position = self.position
+        else:
+            self.position -= 1
+
+        # Edit the message if there is still data. otherwise delete it.
+        if self.pages > 0:
+            await interaction.response.edit_message(embed=self.content[self.position], view=self)
+        else:
+            await interaction.message.delete() # This is 404ing and I can't think of a good way to fix it right now.
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
