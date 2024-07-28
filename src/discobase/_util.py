@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
 from contextlib import asynccontextmanager
-from typing import Any, TypeVar
+from typing import Any, Coroutine, TypeVar
 
 import discord
 from loguru import logger
@@ -25,7 +24,7 @@ class GatherGroup:
                 except discord.HTTPException as e:
                     if e.code == 429:
                         logger.warning("Ratelimited! Retrying...")
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.1)
 
         task = asyncio.create_task(inner_coro())
         self.tasks.append(task)

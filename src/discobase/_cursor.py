@@ -9,13 +9,15 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import discord
+from aiocache import cached
 from discord.utils import snowflake_time, time_snowflake
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
 from ._util import gather_group
-from .exceptions import DatabaseCorruptionError, DatabaseStorageError
+from .exceptions import (DatabaseCorruptionError, DatabaseLookupError,
+                         DatabaseStorageError)
 
 if TYPE_CHECKING:
     from .table import Table
@@ -199,6 +201,7 @@ class TableCursor:
         )
         return index
 
+    @lru_cache()
     def _hash(
         self,
         value: Any,
@@ -255,13 +258,16 @@ class TableCursor:
         hashed = self._hash(value)
         return hashed, self._to_index(hashed)
 
-    async def _lookup_message(
+    @cached()
+    async def _lookup_message_impl(
         self,
         channel: discord.TextChannel,
         index: int,
     ) -> discord.Message:
         """
-        Lookup a message by it's index in the table.
+        The *implementation* of looking up a message by
+        it's index in the table. You need to call `fetch()`
+        on the result of this function due to caching.
 
         Args:
             channel: Index channel to search.
@@ -301,6 +307,27 @@ class TableCursor:
         raise DatabaseCorruptionError(
             f"message index out of range for table {metadata.name}: {index}"
         )
+
+    async def _lookup_message(
+        self,
+        channel: discord.TextChannel,
+        index: int,
+    ) -> discord.Message:
+        """
+        Lookup a message by it's index in the table.
+
+        Args:
+            channel: Index channel to search.
+            index: Index to get.
+
+        Returns:
+            discord.Message: The found message.
+
+        Raises:
+            DatabaseCorruptionError: Could not find the index.
+        """
+        # We need to refetch it for the latest content.
+        return await (await self._lookup_message_impl(channel, index)).fetch()
 
     async def _resize_hash(
         self,
@@ -388,6 +415,7 @@ class TableCursor:
                     channel,
                     new_index,
                 )
+
                 next_record = _IndexableRecord.from_message(target.content)
                 inplace: bool = True
                 overwrite: bool = True
@@ -731,58 +759,78 @@ class TableCursor:
         sets_list: list[set[int]] = []
 
         logger.debug(f"Looking for query {query!r} in {name}")
-        for field, value in query.items():
-            if field not in metadata.keys:
-                raise ValueError(f"table {metadata.name} has no field {field}")
-
-            channel = self._find_channel(
-                metadata.index_channels[f"{name}_{field}"]
-            )
-
-            hashed_field, target_index = self._as_hashed(value)
-            entry_message: discord.Message = await self._lookup_message(
-                channel,
-                target_index,
-            )
-            serialized_content = _IndexableRecord.from_message(
-                entry_message.content
-            )
-
-            if not serialized_content:
-                logger.info("Nothing was found.")
-                continue
-
-            if serialized_content.key == hashed_field:
-                logger.debug(f"Key matches hash! {serialized_content}")
-                sets_list.append(set(serialized_content.record_ids))
-            else:
-                # Hash collision!
-                def find_hash(message: str | None) -> bool:
-                    if not message:
-                        return False
-
-                    index_record = _IndexableRecord.from_message(message)
-                    if not index_record:
-                        return False
-
-                    return index_record.key == hashed_field
-
-                entry = await self._find_collision_message(
-                    channel,
-                    target_index,
-                    search_func=find_hash,
-                )
-
-                rec = _IndexableRecord.from_message(entry.content)
-                logger.debug(f"Found hash collision index entry: {rec}")
-                if not rec:
-                    # This shouldn't be possible, considering the
-                    # search function explicitly disallows that.
-                    raise DatabaseCorruptionError(
-                        "search function found null entry somehow"
+        async with gather_group() as group:
+            for field, value in query.items():
+                if field not in metadata.keys:
+                    raise DatabaseLookupError(
+                        f"table {metadata.name} has no field {field}"
                     )
 
-                sets_list.append(set(rec.record_ids))
+                channel = self._find_channel(
+                    metadata.index_channels[f"{name}_{field}"]
+                )
+
+                hashed_field, target_index = self._as_hashed(value)
+                entry_message_task = group.add(
+                    self._lookup_message(
+                        channel,
+                        target_index,
+                    )
+                )
+
+                def _entry_message_cb(fut: asyncio.Task[discord.Message]):
+                    entry_message = fut.result()
+                    serialized_content = _IndexableRecord.from_message(
+                        entry_message.content
+                    )
+
+                    if not serialized_content:
+                        logger.info("Nothing was found.")
+                        return
+
+                    if serialized_content.key == hashed_field:
+                        logger.debug(f"Key matches hash! {serialized_content}")
+                        sets_list.append(set(serialized_content.record_ids))
+                    else:
+                        # Hash collision!
+                        def find_hash(message: str | None) -> bool:
+                            if not message:
+                                return False
+
+                            index_record = _IndexableRecord.from_message(
+                                message
+                            )
+                            if not index_record:
+                                return False
+
+                            return index_record.key == hashed_field
+
+                        entry_task = group.add(
+                            self._find_collision_message(
+                                channel,
+                                target_index,
+                                search_func=find_hash,
+                            )
+                        )
+
+                        def _cb(fut: asyncio.Task[discord.Message]):
+                            entry = fut.result()
+                            rec = _IndexableRecord.from_message(entry.content)
+                            logger.debug(
+                                f"Found hash collision index entry: {rec}"
+                            )  # noqa
+                            if not rec:
+                                # This shouldn't be possible, considering the
+                                # search function explicitly disallows that.
+                                raise DatabaseCorruptionError(
+                                    "search function found null entry somehow"
+                                )
+
+                            sets_list.append(set(rec.record_ids))
+
+                        entry_task.add_done_callback(_cb)
+
+                entry_message_task.add_done_callback(_entry_message_cb)
 
         if not query:
             logger.info("Query is empty, finding all entries!")
