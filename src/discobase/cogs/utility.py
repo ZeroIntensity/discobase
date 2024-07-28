@@ -135,7 +135,7 @@ class Utility(commands.Cog):
     @app_commands.command(description="Modifies a record with a new value.")
     @app_commands.describe(
         table="Choose the table you want to perform an update on.",
-        field="Choose the key you want to update.",
+        column="Choose the column you want to update.",
         current_value="The current value saved in the column.",
         new_value="Your new information.",
     )
@@ -148,29 +148,37 @@ class Utility(commands.Cog):
         new_value: str,
     ) -> None:
         table_info: list | None = None
-
-        if table.name in self.bot.db.tables:
-            table_info = self.bot.db.tables[table.name]
-
-            try:
-                for disco_key in table_info.__disco_keys__:
-                    if disco_key == column:
-                        found_table = table_info.find(**{column: current_value})
-                        setattr(found_table, column, new_value)
-                        found_table.update()
-                        interaction.response.send_message(
-                            f"Successfully updated the value of **{column}** in **{table.name}**."
-                        )
-                    else:
-                        interaction.response.send_message("The field does not exist.")
-            except ValidationError:
-                interaction.response.send_message(
-                    "`new_value` could not be converted to the field's data type, use `/schema` to check the data type of the column before trying again."
+        try:
+            if table.name in self.db.tables:
+                await interaction.response.send_message(
+                    content=f"Table `{table.name}` found! Searching for record..."
                 )
-        else:
-            interaction.response.send_message(
-                "There is no table with that name, try creating a table."
-            )
+                table_info = self.db.tables[table.name]
+
+                try:
+                    for disco_key in table_info.__disco_keys__:
+                        if disco_key == column:
+                            found_table = table_info.find(**{column: current_value})
+                            setattr(found_table, column, new_value)
+                            found_table.update()
+                            await interaction.edit_original_response(
+                                content=f"Successfully updated the value of **{column}** in **{table.name}**."
+                            )
+                        else:
+                            await interaction.edit_original_response(
+                                content="The column does not exist."
+                            )
+                except ValidationError:
+                    await interaction.edit_original_response(
+                        content=f"`{new_value}` could not be converted to the field's data type, use `/schema` to "
+                                f"check the data type of the column before trying again."
+                    )
+            else:
+                await interaction.edit_original_response(
+                    content="There is no table with that name, try creating a table."
+                )
+        except Exception as e:
+            logger.exception(e)
 
     @app_commands.command(
         description="Performs a left-join on two tables."
