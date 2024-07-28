@@ -14,6 +14,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
+from ._util import gather_group
 from .exceptions import DatabaseCorruptionError, DatabaseStorageError
 
 if TYPE_CHECKING:
@@ -587,18 +588,21 @@ class TableCursor:
         )
         message = await main_table.send(record_data.model_dump_json())
 
-        for field, value in record.model_dump().items():
-            channel = self._find_channel(
-                metadata.index_channels[f"{record.__disco_name__}_{field}"]
-            )
-            # TODO: Use gather here
-            hashed_field, target_index = self._as_hashed(value)
-            await self._write_index_record(
-                channel,
-                target_index,
-                hashed_field,
-                message.id,
-            )
+        async with gather_group() as group:
+            for field, value in record.model_dump().items():
+                channel = self._find_channel(
+                    metadata.index_channels[f"{record.__disco_name__}_{field}"]
+                )
+                # TODO: Use gather here
+                hashed_field, target_index = self._as_hashed(value)
+                group.add(
+                    self._write_index_record(
+                        channel,
+                        target_index,
+                        hashed_field,
+                        message.id,
+                    )
+                )
 
         return await message.edit(content=record_data.model_dump_json())
 
