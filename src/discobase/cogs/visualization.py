@@ -183,7 +183,7 @@ class Visualization(commands.Cog):
                 title=f"Table: {table.name.title()}",
                 content=schemas,
                 headers=None,
-                style=embed.EmbedStyle.SCHEMA
+                style=embed.EmbedStyle.SCHEMA,
             ).create()
 
             await interaction.response.send_message(embed=embed_gen)
