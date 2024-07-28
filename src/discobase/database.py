@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from pkgutil import iter_modules
 from typing import Coroutine, NoReturn, Type, TypeVar
 
 import discord
@@ -148,14 +147,12 @@ class Database:
         """
         logger.info("Initializing the bot.")
         # Load external commands
-        coros: list[asyncio.Task] = []
-        for module in iter_modules(path=["cogs"], prefix="cogs."):
-            logger.debug(f"Loading module with cog: {module}")
-            coros.append(
-                asyncio.create_task(self.bot.load_extension(module.name))
-            )
+        from .cogs.utility import Utility
+        from .cogs.visualization import Visualization
 
-        await asyncio.gather(*coros)
+        await self.bot.add_cog(Utility(self.bot))
+        await self.bot.add_cog(Visualization(self.bot))
+
         logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
         logger.info("Bot is ready!")
@@ -183,7 +180,7 @@ class Database:
             f"Invite to server: {await self._metadata_channel.create_invite()}"
         )
         logger.info("Syncing slash commands, this might take a minute.")
-        await self.bot.tree.sync()
+        logger.debug(f"Synced slash commands: {await self.bot.tree.sync()}")
 
     async def build_tables(self) -> None:
         """
