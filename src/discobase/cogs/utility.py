@@ -96,6 +96,7 @@ class Utility(commands.Cog):
         results_found: int | None = None
         results_str: str = ""
 
+        logger.debug("Find slash cmd initialised.")
         await interaction.response.send_message(
             content=f"Searching for `{value}`..."
         )
@@ -147,6 +148,7 @@ class Utility(commands.Cog):
         current_value: str,
         new_value: str,
     ) -> None:
+        logger.debug("Update slash cmd initialized.")
         table_info: list | None = None
         if table.name in self.db.tables:
             await interaction.response.send_message(
@@ -257,6 +259,7 @@ class Utility(commands.Cog):
             self,
             interaction: discord.Interaction
     ) -> None:
+        logger.debug("Reset cmd initialized.")
         await interaction.response.send_message(
             content=f"Resetting the database, `{self.db.name}`..."
         )
