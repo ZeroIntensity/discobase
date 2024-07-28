@@ -15,7 +15,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
-from ._util import gather_group
+from ._util import free_fly, gather_group
 from .exceptions import (DatabaseCorruptionError, DatabaseLookupError,
                          DatabaseStorageError)
 
@@ -182,7 +182,7 @@ class TableCursor:
         # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
         logger.debug(f"Editing message (ID {mid}) to {content}")
-        await editable_message.edit(content=content)
+        free_fly(editable_message.edit(content=content))
 
     def _to_index(self, value: int) -> int:
         """
@@ -405,7 +405,7 @@ class TableCursor:
                 limit=old_size,
                 oldest_first=True,
             ):
-                msg = await channel.fetch_message(msg.id)  # TODO: Remove this
+                # msg = await channel.fetch_message(msg.id)  # TODO: Remove this
                 record = _IndexableRecord.from_message(msg.content)
                 if not record:
                     continue
@@ -486,8 +486,8 @@ class TableCursor:
             # than trying to put the entire table into memory in order to
             # resize it.
             #
-            # This algorithm is pretty much infinitely scalable, if you factor
-            # out Discord's ratelimit.
+            # This algorithm is pretty much infinitely scalable
+            # in terms of memory, but we're limited by Discord's ratelimit.
             async for msg in channel.history(
                 limit=metadata.max_records,
                 oldest_first=True,
@@ -640,7 +640,6 @@ class TableCursor:
                 channel = self._find_channel(
                     metadata.index_channels[f"{record.__disco_name__}_{field}"]
                 )
-                # TODO: Use gather here
                 hashed_field, target_index = self._as_hashed(value)
                 group.add(
                     self._write_index_record(
@@ -675,7 +674,9 @@ class TableCursor:
         current = _Record.model_validate_json(msg.content).decode_content(
             record
         )
-        await msg.edit(content=_Record.from_data(record).model_dump_json())
+        task = free_fly(
+            msg.edit(content=_Record.from_data(record).model_dump_json())
+        )
 
         async with gather_group() as group:
             for new, old in zip(
@@ -735,6 +736,7 @@ class TableCursor:
 
                 old_msg_task.add_done_callback(_cb)
 
+        await task  # Ensure that it's done
         return msg
 
     async def find_records(
@@ -1005,8 +1007,8 @@ class TableCursor:
         table.__disco_cursor__ = self
         # Since Discord generates the message ID, we have to do these
         # message editing shenanigans.
-        await message.edit(content=metadata.model_dump_json())
         metadata.message_id = message.id
+        await message.edit(content=metadata.model_dump_json())
         logger.debug(f"Generated table metadata: {metadata!r}")
         return self
 
