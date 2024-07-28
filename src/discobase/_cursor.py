@@ -602,7 +602,7 @@ class TableCursor:
 
         return await message.edit(content=record_data.model_dump_json())
 
-    async def update_record(self, record: Table) -> None:
+    async def update_record(self, record: Table) -> discord.Message:
         """
         Updates an existing record in a table.
 
@@ -669,6 +669,7 @@ class TableCursor:
                 # There are other entries with this value, only remove this ID
                 old_record.record_ids.remove(msg.id)
                 await old_msg.edit(content=old_record.model_dump_json())
+        return msg
 
     async def find_records(
         self,
