@@ -6,7 +6,7 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Iterable
 from datetime import timedelta
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import discord
 from aiocache import cached
@@ -27,7 +27,6 @@ __all__ = ("TableCursor",)
 class _Record(BaseModel):
     content: str
     """Base64 encoded Pydantic model dump of the record."""
-    indexes: Dict
 
     @classmethod
     def from_data(cls, data: Table) -> _Record:
@@ -36,7 +35,6 @@ class _Record(BaseModel):
             content=urlsafe_b64encode(  # Record JSON data is stored in base64
                 data.model_dump_json().encode("utf-8"),
             ).decode("utf-8"),
-            indexes={},
         )
 
     def decode_content(self, record: Table | type[Table]) -> Table:
@@ -64,7 +62,7 @@ class _IndexableRecord(BaseModel):
 
         Returns:
             _IndexableRecord | None: An `_IndexableRecord` instance, or `None`,
-            if the message was `null`.
+                if the message was `null`.
         """
         logger.debug(f"Parsing {message} into an _IndexableRecord")
         try:
@@ -212,7 +210,7 @@ class TableCursor:
 
         Returns:
             int: An integer, positive or negative, representing a unique hash.
-            This is always the same thing across programs.
+                This is always the same thing across programs.
         """
         logger.debug(f"Hashing object: {value!r}")
         if isinstance(value, str):
@@ -341,7 +339,7 @@ class TableCursor:
 
         Returns:
             int: snowflake representation of when the last message of the
-            resize was created
+                resize was created
         """
         last_message: discord.Message | None = None
 
@@ -729,8 +727,8 @@ class TableCursor:
 
         Returns:
             list[Table]: A list of `Table` objects (or really, a list of
-            objects that inherit from `Table`), with the appropriate values
-            specified by `query`.
+                objects that inherit from `Table`), with the appropriate values
+                specified by `query`.
         """
         metadata = self.metadata
         name = table.__disco_name__
@@ -837,8 +835,8 @@ class TableCursor:
 
         Returns:
             tuple[int, int, int]: Tuple containing the channel name,
-            the ID of the created channel, and the snowflake time of the last
-            message created in the hash table
+                the ID of the created channel, and the snowflake time of the
+                last message created in the hash table.
         """
         # Key channels are stored in
         # the format of <table_name>_<field_name>
