@@ -94,6 +94,7 @@ class Table(BaseModel):
             msg = fut.result()
             self.__disco_id__ = msg.id
 
+        task.add_done_callback(_cb)
         return task
 
     def _ensure_written(self) -> None:
