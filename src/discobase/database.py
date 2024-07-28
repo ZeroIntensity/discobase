@@ -25,11 +25,21 @@ class Database:
     database bot controller.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        logging: bool = False,
+    ) -> None:
         """
         Args:
             name: Name of the Discord server that will be used as the database.
+            logging: Whether to enable logging.
         """
+        if logging:
+            logger.enable("discobase")
+        else:
+            logger.disable("discobase")
+
         self.name = name
         """Name of the Discord-database server."""
         self.bot = commands.Bot(
