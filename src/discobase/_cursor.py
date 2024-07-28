@@ -178,7 +178,6 @@ class TableCursor:
         This should *not* be used over `discord.Message.edit`, it's simply
         a handy utility to use when you only have the message ID.
         """
-        # TODO: Implement caching of the message ID
         editable_message = await channel.fetch_message(mid)
         logger.debug(f"Editing message (ID {mid}) to {content}")
         await editable_message.edit(content=content)
@@ -977,6 +976,7 @@ class TableCursor:
             # Sanity check
             raise DatabaseCorruptionError("record must have an id to update")
 
+        record.__disco_id__ = -1
         metadata = self.metadata
         main_table: discord.TextChannel = self._find_channel(
             metadata.table_channel
@@ -987,12 +987,10 @@ class TableCursor:
         )
 
         for field, value in current.model_dump().items():
-            # TODO: Gather this loop
             channel = self._find_channel(
                 metadata.index_channels[f"{current.__disco_name__}_{field}"]
             )
 
-            # TODO: Retain DRY principle with update_record
             index = self._to_index(self._hash(value))
             index_message = await self._lookup_message(channel, index)
             index_record = _IndexableRecord.from_message(index_message.content)
