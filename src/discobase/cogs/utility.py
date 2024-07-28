@@ -167,24 +167,28 @@ class Utility(commands.Cog):
         try:
             table_obj = self.db.tables[table.name]
             await interaction.edit_original_response(
-                content=f"Table `{table_obj.__disco_name__} found! Searching for record..."
+                content=f"Table `{table_obj.__disco_name__}` found! Searching for record..."
             )
         except IndexError as e:
             logger.error(e)
             await interaction.edit_original_response(
-                content=f"The table '{table.name}' does not exist."
+                content=f"The table `{table.name}` does not exist."
             )
             return
 
         try:
             record_dict = json.loads(record)
-            table_record = table_obj.find(**record_dict)
+            table_record = await table_obj.find(**record_dict)
+            table_record = table_record[0]
             if table_record is None:
                 raise ValueError
+            await interaction.edit_original_response(
+                content=f"Record `{record}` found! Deleting..."
+            )
         except ValueError as e:
             logger.error(e)
             await interaction.edit_original_response(
-                content=f"No record found for {record}."
+                content=f"No record found for `{record}`."
             )
             return
         except TypeError as e:
@@ -197,7 +201,7 @@ class Utility(commands.Cog):
         await table_record.delete()
 
         await interaction.edit_original_response(
-            content=f"Record `{record}` has been deleted from {table.name}!"
+            content=f"Record `{record}` has been deleted from `{table.name}`!"
         )
 
     @app_commands.command(
