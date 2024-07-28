@@ -4,6 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "discobase"
+description = "Database library using nothing but Discord. PyDis Codejam 2024."
 readme = "README.md"
 license = "MIT"
 dependencies = ["discord.py", "pydantic", "typing_extensions", "loguru", "aiocache"]
