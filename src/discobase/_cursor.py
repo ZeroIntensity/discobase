@@ -706,32 +706,23 @@ class TableCursor:
                 )
 
                 old_index = self._to_index(self._hash(old_value))
-                old_msg_task = group.add(
-                    self._lookup_message(channel, old_index)
-                )
+                old_msg = await self._lookup_message(channel, old_index)
+                old_record = _IndexableRecord.from_message(old_msg.content)
+                if not old_record:
+                    raise DatabaseCorruptionError(
+                        "got null record somehow",
+                    )
 
-                def _cb(fut: asyncio.Task[discord.Message]):
-                    old_msg = fut.result()
-                    old_record = _IndexableRecord.from_message(old_msg.content)
-                    if not old_record:
-                        raise DatabaseCorruptionError(
-                            "got null record somehow",
-                        )
-
-                    if len(old_record.record_ids) == 1:
-                        logger.info("We can nullify this entry.")
-                        group.add(old_msg.edit(content="null"))
-                        self.metadata.current_records -= 1
-                    else:
-                        logger.info(
-                            "There are other entries with this value, only remove this ID."  # noqa
-                        )
-                        old_record.record_ids.remove(msg.id)
-                        group.add(
-                            old_msg.edit(content=old_record.model_dump_json())
-                        )
-
-                old_msg_task.add_done_callback(_cb)
+                if len(old_record.record_ids) == 1:
+                    logger.info("We can nullify this entry.")
+                    await old_msg.edit(content="null")
+                    self.metadata.current_records -= 1
+                else:
+                    logger.info(
+                        "There are other entries with this value, only remove this ID."  # noqa
+                    )
+                    old_record.record_ids.remove(msg.id)
+                    await old_msg.edit(content=old_record.model_dump_json())
 
         return msg
 
@@ -757,78 +748,61 @@ class TableCursor:
         sets_list: list[set[int]] = []
 
         logger.debug(f"Looking for query {query!r} in {name}")
-        async with gather_group() as group:
-            for field, value in query.items():
-                if field not in metadata.keys:
-                    raise DatabaseLookupError(
-                        f"table {metadata.name} has no field {field}"
-                    )
-
-                channel = self._find_channel(
-                    metadata.index_channels[f"{name}_{field}"]
+        for field, value in query.items():
+            if field not in metadata.keys:
+                raise DatabaseLookupError(
+                    f"table {metadata.name} has no field {field}"
                 )
 
-                hashed_field, target_index = self._as_hashed(value)
-                entry_message_task = group.add(
-                    self._lookup_message(
-                        channel,
-                        target_index,
-                    )
+            channel = self._find_channel(
+                metadata.index_channels[f"{name}_{field}"]
+            )
+
+            hashed_field, target_index = self._as_hashed(value)
+            entry_message = await self._lookup_message(
+                channel,
+                target_index,
+            )
+
+            serialized_content = _IndexableRecord.from_message(
+                entry_message.content
+            )
+
+            if not serialized_content:
+                logger.info("Nothing was found.")
+                continue
+
+            if serialized_content.key == hashed_field:
+                logger.debug(f"Key matches hash! {serialized_content}")
+                sets_list.append(set(serialized_content.record_ids))
+            else:
+                # Hash collision!
+                def find_hash(message: str | None) -> bool:
+                    if not message:
+                        return False
+
+                    index_record = _IndexableRecord.from_message(message)
+                    if not index_record:
+                        return False
+
+                    return index_record.key == hashed_field
+
+                entry = await self._find_collision_message(
+                    channel,
+                    target_index,
+                    search_func=find_hash,
                 )
 
-                def _entry_message_cb(fut: asyncio.Task[discord.Message]):
-                    entry_message = fut.result()
-                    serialized_content = _IndexableRecord.from_message(
-                        entry_message.content
+                rec = _IndexableRecord.from_message(entry.content)
+                logger.debug(f"Found hash collision index entry: {rec}")  # noqa
+                if not rec:
+                    # This shouldn't be possible, considering the
+                    # search function explicitly disallows that.
+                    raise DatabaseCorruptionError(
+                        "search function found null entry somehow"
                     )
 
-                    if not serialized_content:
-                        logger.info("Nothing was found.")
-                        return
-
-                    if serialized_content.key == hashed_field:
-                        logger.debug(f"Key matches hash! {serialized_content}")
-                        sets_list.append(set(serialized_content.record_ids))
-                    else:
-                        # Hash collision!
-                        def find_hash(message: str | None) -> bool:
-                            if not message:
-                                return False
-
-                            index_record = _IndexableRecord.from_message(
-                                message
-                            )
-                            if not index_record:
-                                return False
-
-                            return index_record.key == hashed_field
-
-                        entry_task = group.add(
-                            self._find_collision_message(
-                                channel,
-                                target_index,
-                                search_func=find_hash,
-                            )
-                        )
-
-                        def _cb(fut: asyncio.Task[discord.Message]):
-                            entry = fut.result()
-                            rec = _IndexableRecord.from_message(entry.content)
-                            logger.debug(
-                                f"Found hash collision index entry: {rec}"
-                            )  # noqa
-                            if not rec:
-                                # This shouldn't be possible, considering the
-                                # search function explicitly disallows that.
-                                raise DatabaseCorruptionError(
-                                    "search function found null entry somehow"
-                                )
-
-                            sets_list.append(set(rec.record_ids))
-
-                        entry_task.add_done_callback(_cb)
-
-                entry_message_task.add_done_callback(_entry_message_cb)
+                sets_list.append(set(rec.record_ids))
 
         if not query:
             logger.info("Query is empty, finding all entries!")
