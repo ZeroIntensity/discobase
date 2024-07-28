@@ -16,7 +16,9 @@ class Utility(commands.Cog):
         self.bot = bot
         self.db = self.bot.db
 
-    @app_commands.command(description="Insert new data into a table.")
+    @app_commands.command(
+        description="Insert new data into a table."
+    )
     @app_commands.describe(
         table="Choose the table you want to insert the data into.",
         data="The data that is to be inserted.",
@@ -28,7 +30,9 @@ class Utility(commands.Cog):
         data: str,
     ) -> None:
         logger.info("Called 'insert' command.")
-        await interaction.response.send_message(f"Looking for {table.name}...")
+        await interaction.response.send_message(
+            content=f"Looking for `{table.name}`..."
+        )
 
         table_name = table.name.replace("-", " ").lower()
 
@@ -37,13 +41,13 @@ class Utility(commands.Cog):
         except IndexError as e:
             logger.error(e)
             await interaction.edit_original_response(
-                content=f"The table '{table_name}' does not exist."
+                content=f"The table `{table_name}` does not exist."
             )
             return
 
         try:
             await interaction.edit_original_response(
-                content=f"Table `{table_name} found! Adding data to table..."
+                content=f"Table `{table_name}` found! Adding data to table..."
             )
             data_dict: dict = json.loads(data)
         except TypeError as e:
@@ -59,7 +63,7 @@ class Utility(commands.Cog):
         except ValidationError as e:
             logger.error(e)
             await interaction.edit_original_response(
-                content=f"You are missing one of the following columns in your data: {table_obj.__disco_keys__}."
+                content=f"You are missing one of the following columns in your data: `{table_obj.__disco_keys__}`."
             )
             return
 
@@ -73,7 +77,9 @@ class Utility(commands.Cog):
             content=f"I have inserted `{data}` into `{table_name}` table."
         )
 
-    @app_commands.command(description="Finds a record with the specific column and value in the table.")
+    @app_commands.command(
+        description="Finds a record with the specific column and value in the table."
+    )
     @app_commands.describe(
         table="The name of the table the column is in.",
         column="The name of the column.",
@@ -86,6 +92,9 @@ class Utility(commands.Cog):
         column: str,
         value: str,
     ) -> None:
+        await interaction.response.send_message(
+            content=f"Searching for `{value}`..."
+        )
 
         table_info: list | None = None
         results: list | None = None
@@ -93,34 +102,41 @@ class Utility(commands.Cog):
         results_found: int | None = None
         results_str: str | None = None
 
-        if table.name in self.bot.db.tables:
-            table_info = self.bot.db.tables[table.name]
+        try:
+            if table.name in self.bot.db.tables:
+                table_info = self.bot.db.tables[table.name]
 
-            if column in table_info.__disco_keys__:
-                results = table_info.find(**{column: value})
-                results_found = len(results)
-                if results_found > 0:
-                    embed: discord.Embed = discord.Embed(
-                        title=f"Search Result - {results_found} Record(s) Found",
-                        color=discord.Color.blurple,
-                    )
+                if column in table_info.__disco_keys__:
+                    results = table_info.find(**{column: value})
+                    results_found = len(results)
+                    if results_found > 0:
+                        embed: discord.Embed = discord.Embed(
+                            title=f"Search Result - {results_found} Record(s) Found",
+                            color=discord.Color.blurple,
+                        )
 
-                    for count, value in enumerate(results, start=1):
-                        results_str += f"**{count}**. {str(value)}\n"
+                        for count, value in enumerate(results, start=1):
+                            results_str += f"**{count}**. {str(value)}\n"
 
-                    embed.description(results_str)
-                    interaction.response.send_message(embed=embed)
-                else:
-                    interaction.response.send_message(
-                        "The record could not be found."
-                    )
-        else:
-            interaction.response.send_message(
-                "Either the table doesn't exist or the column doesn't exist."
-            )
+                        embed.description(results_str)
+                        interaction.response.send_message(embed=embed)
+                    else:
+                        interaction.response.send_message(
+                            "The record could not be found."
+                        )
+            else:
+                interaction.response.send_message(
+                    "Either the table doesn't exist or the column doesn't exist."
+                )
+        except Exception as e:
+            logger.exception(e)
 
-    @app_commands.command(description="Performs a left-join on two tables.")
-    @app_commands.describe(key="The shared primary key to join the tables on.")
+    @app_commands.command(
+        description="Performs a left-join on two tables."
+    )
+    @app_commands.describe(
+        key="The shared primary key to join the tables on."
+    )
     async def join(
         self,
         inter: discord.Integration,
@@ -130,10 +146,12 @@ class Utility(commands.Cog):
     ) -> None:
         pass
 
-    @app_commands.command(description="Deletes a record from a table.")
+    @app_commands.command(
+        description="Deletes a record from a table."
+    )
     @app_commands.describe(
         table="The table from which you want to delete",
-        record="The record you want to delete formatted as a json."
+        record="The record you want to delete - formatted as a json."
     )
     async def delete(
             self,
@@ -141,9 +159,50 @@ class Utility(commands.Cog):
             table: discord.TextChannel,
             record: str
     ) -> None:
-        pass
+        logger.debug("Delete cmd initialized.")
+        await interaction.response.send_message(
+            content=f"Searching for table `{table.name}`..."
+        )
 
-    @app_commands.command(description="Resets the database, deleting all channels and unloading tables.")
+        try:
+            table_obj = self.db.tables[table.name]
+            await interaction.edit_original_response(
+                content=f"Table `{table_obj.__disco_name__} found! Searching for record..."
+            )
+        except IndexError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"The table '{table.name}' does not exist."
+            )
+            return
+
+        try:
+            record_dict = json.loads(record)
+            table_record = table_obj.find(**record_dict)
+            if table_record is None:
+                raise ValueError
+        except ValueError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"No record found for {record}."
+            )
+            return
+        except TypeError as e:
+            logger.error(e)
+            await interaction.edit_original_response(
+                content=f"The record you entered was not in json format.\nEntered record: {record}"
+            )
+            return
+
+        await table_record.delete()
+
+        await interaction.edit_original_response(
+            content=f"Record `{record}` has been deleted from {table.name}!"
+        )
+
+    @app_commands.command(
+        description="Resets the database, deleting all channels and unloading tables."
+    )
     async def reset(
             self,
             interaction: discord.Interaction

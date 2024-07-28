@@ -1,7 +1,9 @@
 from datetime import datetime as dt
 from enum import StrEnum, auto
+from math import ceil
 
 import discord
+from loguru import logger
 
 """
 How to Use:
@@ -21,6 +23,7 @@ class ArrowButtons(discord.ui.View):
         self.content = content
         self.position = 0
         self.pages = len(self.content)
+        logger.debug(f"pages in button {self.pages}")
         self.on_ready()
 
     @discord.ui.button(label='◀', style=discord.ButtonStyle.primary, custom_id='l_button')
@@ -133,7 +136,8 @@ class EmbedFromContent:
         embeds: list[discord.Embed] = []
 
         column_data: list[str] = self.content
-        self.page_total = round(len(column_data) / 15) + 1
+        self.page_total = ceil(len(column_data) / 15)
+        logger.debug(f"{self.page_total}, round: {len(column_data) / 15}")
 
         # Create each embed with the data
         for i in range(0, len(column_data), entries_per_page):
@@ -168,7 +172,7 @@ class EmbedFromContent:
 
         column_names: list = self.headers
         table_data: dict = self.content
-        self.page_total = round(len(self.content[self.headers[0]]) / entries_per_page) + 1
+        self.page_total = ceil(len(self.content[self.headers[0]]) / entries_per_page)
 
         # get the len of the first column's data
         for i in range(0, len(table_data[column_names[0]]), entries_per_page):
@@ -232,6 +236,7 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title,
             color=self.color,
+            description=self.content,
             type='rich',
             timestamp=dt.now()
         )
