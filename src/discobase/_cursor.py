@@ -62,8 +62,8 @@ class _IndexableRecord(BaseModel):
             message: Message content to parse as JSON.
 
         Returns:
-            An `_IndexableRecord` instance, or `None`, if the message
-            was `null`.
+            _IndexableRecord | None: An `_IndexableRecord` instance, or `None`,
+            if the message was `null`.
         """
         logger.debug(f"Parsing {message} into an _IndexableRecord")
         try:
@@ -132,6 +132,9 @@ class TableCursor:
             channel: Index channel to search.
             index: The index to start at.
             search_func: Function to check if the message content is good.
+
+        Returns:
+            discord.Message: The message that satisfies search_func
         """
         logger.debug(
             f"Looking up hash collision entry using search function: {search_func}"  # noqa
@@ -188,7 +191,7 @@ class TableCursor:
             value: Integer hash, positive or negative.
 
         Returns:
-            Index in range of `metadata.max_records`.
+            int: Index in range of `metadata.max_records`.
         """
         index = (value & 0x7FFFFFFF) % self.metadata.max_records
         logger.debug(
@@ -207,7 +210,7 @@ class TableCursor:
             value: Any discobase-hashable object.
 
         Returns:
-            An integer, positive or negative, representing the unique hash.
+            int: An integer, positive or negative, representing the unique hash.
             This is always the same thing across programs.
         """
         logger.debug(f"Hashing object: {value!r}")
@@ -265,7 +268,7 @@ class TableCursor:
             index: Index to get.
 
         Returns:
-            The found message.
+            discord.Message: The found message.
 
         Raises:
             DatabaseCorruptionError: Could not find the index.
@@ -309,10 +312,14 @@ class TableCursor:
         Args:
             index_channel: the channel that contains index data for a database
             amount: the amount to increase the size by
+
+        Returns:
+            int: snowflake representation of when the last message of the
+            resize was created
         """
         last_message: discord.Message | None = None
         for _ in range(amount):
-            last_message = await index_channel.send("null")
+            last_message = await index_channel.send("null", silent=True)
 
         if not last_message:
             raise DatabaseCorruptionError("last_message is None somehow")
@@ -578,7 +585,7 @@ class TableCursor:
             record: The record object being written to the table
 
         Returns:
-            The `discord.Message` that contains the new entry.
+            discord.Message: The `discord.Message` that contains the new entry.
         """
 
         metadata = self.metadata
@@ -586,7 +593,7 @@ class TableCursor:
         main_table: discord.TextChannel = self._find_channel(
             metadata.table_channel
         )
-        message = await main_table.send(record_data.model_dump_json())
+        message = await main_table.send(record_data.model_dump_json(), silent=True)
 
         async with gather_group() as group:
             for field, value in record.model_dump().items():
@@ -606,7 +613,7 @@ class TableCursor:
 
         return await message.edit(content=record_data.model_dump_json())
 
-    async def update_record(self, record: Table) -> None:
+    async def update_record(self, record: Table) -> discord.Message:
         """
         Updates an existing record in a table.
 
@@ -614,7 +621,7 @@ class TableCursor:
             record: The record object being written to the table
 
         Returns:
-            The `discord.Message` that contains the new entry.
+            discord.Message: The `discord.Message` that contains the new entry.
         """
         if record.__disco_id__ == -1:
             # Sanity check
@@ -644,7 +651,7 @@ class TableCursor:
             new_value = new[1]
             old_value = old[1]
             if new_value == old_value:
-                # Nothing changed
+                logger.info("Nothing changed.")
                 continue
 
             channel = self._find_channel(
@@ -665,14 +672,17 @@ class TableCursor:
             if not old_record:
                 raise DatabaseCorruptionError("got null record somehow")
 
-            if not len(old_record.record_ids):
-                # We can nullify this entry
+            if len(old_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
                 await old_msg.edit(content="null")
                 self.metadata.current_records -= 1
             else:
-                # There are other entries with this value, only remove this ID
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
                 old_record.record_ids.remove(msg.id)
                 await old_msg.edit(content=old_record.model_dump_json())
+        return msg
 
     async def find_records(
         self,
@@ -687,7 +697,7 @@ class TableCursor:
             query: Dictionary containing field-value pairs.
 
         Returns:
-            A list of `Table` objects (or really, a list of objects
+            list[Table]: A list of `Table` objects (or really, a list of objects
             that inherit from `Table`), with the appropriate values
             specified by `query`.
         """
@@ -791,8 +801,9 @@ class TableCursor:
             initial_size: Equivalent to `initial_size` in `create_table`.
 
         Returns:
-            Tuple containing the channel name
-            and the ID of the created channel.
+            tuple[int, int, int]: Tuple containing the channel name,
+            the ID of the created channel, and the snowflake time of the last
+            message created in the hash table
         """
         # Key channels are stored in
         # the format of <table_name>_<field_name>
@@ -824,10 +835,7 @@ class TableCursor:
             initial_hash_size: the size the index hash tables should start at.
 
         Returns:
-            The `discord.Message` containing all of the metadata
-            for the table. This can be useful for testing or
-            returning the data back to the user. If this is `None`,
-            then the table already existed.
+            TableCursor: An object used to manage a table
         """
 
         logger.debug(f"create_table called with table: {table!r}")
@@ -910,7 +918,7 @@ class TableCursor:
         assert timestamp_snowflake is not None
         metadata.time_table = {timestamp_snowflake: (0, initial_size)}
         metadata.index_channels = index_channels
-        message = await self.metadata_channel.send(metadata.model_dump_json())
+        message = await self.metadata_channel.send(metadata.model_dump_json(), silent=True)
 
         table.__disco_cursor__ = self
         # Since Discord generates the message ID, we have to do these
@@ -919,3 +927,52 @@ class TableCursor:
         metadata.message_id = message.id
         logger.debug(f"Generated table metadata: {metadata!r}")
         return self
+
+    async def delete_record(self, record: Table) -> None:
+        """
+        Deletes an existing record in a table.
+
+        Args:
+            record: The record object being deleted from the table.
+        """
+        if record.__disco_id__ == -1:
+            # Sanity check
+            raise DatabaseCorruptionError("record must have an id to update")
+
+        metadata = self.metadata
+        main_table: discord.TextChannel = self._find_channel(
+            metadata.table_channel
+        )
+        msg = await main_table.fetch_message(record.__disco_id__)
+        current = _Record.model_validate_json(msg.content).decode_content(
+            record
+        )
+
+        for field, value in current.model_dump().items():
+            # TODO: Gather this loop
+            channel = self._find_channel(
+                metadata.index_channels[f"{current.__disco_name__}_{field}"]
+            )
+
+            # TODO: Retain DRY principle with update_record
+            index = self._to_index(self._hash(value))
+            index_message = await self._lookup_message(channel, index)
+            index_record = _IndexableRecord.from_message(index_message.content)
+
+            if not index_record:
+                raise DatabaseCorruptionError("got null record somehow")
+
+            if len(index_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
+                await index_message.edit(content="null")
+                self.metadata.current_records -= 1
+            else:
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
+                index_record.record_ids.remove(msg.id)
+                await index_message.edit(
+                    content=index_record.model_dump_json(),
+                )
+
+        await msg.delete()

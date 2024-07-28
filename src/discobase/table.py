@@ -96,7 +96,13 @@ class Table(BaseModel):
 
         return task
 
-    def update(self) -> asyncio.Task[None]:
+    def _ensure_written(self) -> None:
+        if self.__disco_id__ == -1:
+            raise DatabaseStorageError(
+                "this entry has not been written, did you mean to call save()?",  # noqa
+            )
+
+    def update(self) -> asyncio.Task[discord.Message]:
         """
         Update the entry in-place.
 
@@ -119,6 +125,7 @@ class Table(BaseModel):
         """
 
         self._ensure_db()
+        self._ensure_written()
         assert self.__disco_cursor__
         if self.__disco_id__ == -1:
             raise DatabaseStorageError(
@@ -126,7 +133,24 @@ class Table(BaseModel):
             )
         return free_fly(self.__disco_cursor__.update_record(self))
 
-    async def commit(self) -> None: ...
+    def commit(self) -> asyncio.Task[discord.Message]:
+        """
+        Save the current entry, or update it if it already exists in the
+        database.
+        """
+        if self.__disco_id__ == -1:
+            return self.save()
+        else:
+            return self.update()
+
+    def delete(self) -> asyncio.Task[None]:
+        """
+        Delete the current entry from the database.
+        """
+
+        self._ensure_written()
+        assert self.__disco_cursor__
+        return free_fly(self.__disco_cursor__.delete_record(self))
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:
@@ -136,6 +160,8 @@ class Table(BaseModel):
         Args:
             **kwargs: Values to search for. These should be keys in the schema.
 
+        Returns:
+            list[Table]: The list of objects that match the values in kwargs
         Example:
             ```py
             import discobase
@@ -185,6 +211,10 @@ class Table(BaseModel):
 
         Args:
             **kwargs: Values to search for. These should be keys in the schema.
+
+        Returns:
+            Table | None: Returns a single object that matches the values in
+            kwargs or None if no match is found.
         """
 
         if not kwargs:
