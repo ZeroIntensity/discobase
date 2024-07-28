@@ -105,15 +105,13 @@ class ArrowButtons(discord.ui.View):
     async def delete(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         """Controls the delete button on the qotd list embed"""
 
-        # current position is used for deletion of reords
-        current_position = self.position
+        # remove the entry from the database
+        await db_interactions.remove(self.records[self.position]) # This is causing some errors to check in the morning
+        self.records.remove(self.records[self.position])
 
         # remove the embed from the message
-        self.content.remove(self.content[current_position])
+        self.content.remove(self.content[self.position])
         self.pages = len(self.content)
-
-        await db_interactions.remove(self.records[current_position]) # This is causing some errors to check in the morning
-        self.records.remove(self.records[current_position])
 
         # Only change position if the deleted item is not the first one
         if self.position == 0:
@@ -124,14 +122,14 @@ class ArrowButtons(discord.ui.View):
         # set a variable for left button
         left_button: discord.Button = [x for x in self.children if x.custom_id == 'l_button'][0]
         # check if we're not on the first page, if yes then enable left button
-        if not self.position == 0:
-            left_button.disabled = False
+        if self.position == 0:
+            left_button.disabled = True
 
         # set the right button to a variable
         right_button: discord.Button = [x for x in self.children if x.custom_id == 'r_button'][0]
         # check if we're not on the last page, if yes then enable right button
-        if not self.position == self.pages - 1:
-            right_button.disabled = False
+        if self.position == self.pages - 1:
+            right_button.disabled = True
 
         # Edit the message if there is still data. otherwise delete it.
         if self.pages > 0:
