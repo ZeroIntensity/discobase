@@ -5,12 +5,14 @@ import sys
 
 import discord
 import pytest
+import pytest_asyncio
+from pydantic import Field
 
 import discobase
 from discobase.exceptions import DatabaseTableError
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="session")
 async def database():
     db = discobase.Database("discobase test")
     db.login_task(os.environ["TEST_BOT_TOKEN"])
@@ -26,7 +28,7 @@ async def database():
         await db.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="session")
 def bot(database: discobase.Database):
     return database.bot
 
@@ -36,6 +38,7 @@ def test_about():
     assert discobase.__license__ == "MIT"
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_creation(database: discobase.Database, bot: discord.Client):
     found_guild: discord.Guild | None = None
     for guild in bot.guilds:
@@ -45,6 +48,7 @@ async def test_creation(database: discobase.Database, bot: discord.Client):
     assert found_guild == database.guild
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_metadata_channel(database: discobase.Database):
     assert database._metadata_channel is not None
     assert database._metadata_channel.name == "_dbmetadata"
@@ -59,6 +63,7 @@ async def test_metadata_channel(database: discobase.Database):
     assert found is True
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_schemas(database: discobase.Database):
     class Bar(discobase.Table):
         name: str
@@ -77,22 +82,19 @@ async def test_schemas(database: discobase.Database):
 
     Bar = database.table(Bar)
     with pytest.raises(DatabaseTableError):
+        Bar = database.table(Bar)
+        # Duplicate table name
+    with pytest.raises(DatabaseTableError):
         # Not ready
         await Bar(name="Peter", password="foobar").save()
 
     await database.build_tables()
     user = Bar(name="Peter", password="foobar")
     await user.save()
-    assert (await Bar.find(name="Peter"))[0] == user
-
-    with pytest.raises(DatabaseTableError):
-        # Duplicate table name
-        @database.table
-        class Bar(discobase.Table):
-            name: str
-            password: str
+    assert (await Bar.find_unique(name="Peter")) == user
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_resizing(database: discobase.Database):
     @database.table
     class User(discobase.Table):
@@ -127,10 +129,12 @@ async def test_resizing(database: discobase.Database):
     sys.version_info[1] != 12,
     reason="Very long, only run on 3.12",
 )
+@pytest.mark.asyncio(scope="session")
 async def test_long_resize(database: discobase.Database):
     @database.table
     class X(discobase.Table):
         foo: str
+        bar: str = Field(default="bar")
 
     await database.build_tables()
 
@@ -140,6 +144,7 @@ async def test_long_resize(database: discobase.Database):
     items = await X.find()
     assert len(items) == len(string.ascii_letters)
     for i in items:
+        assert i.bar == "bar"
         assert i.foo in string.ascii_letters
 
 
