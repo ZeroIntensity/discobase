@@ -433,38 +433,38 @@ class TableCursor:
             if (not record.next_value) and (target != msg) and overwrite:
                 await msg.edit(content="null")
 
-        # Finally, all the next_value attributes have been set, we can
-        # go through and update each record.
-        #
-        # The overall algorithm is O(2n), but it's much more scalable
-        # than trying to put the entire table into memory in order to
-        # resize it.
-        #
-        # This algorithm is pretty much infinitely scalable, if you factor
-        # out Discord's ratelimit.
-        async for msg in channel.history(
-            limit=metadata.max_records,
-            oldest_first=True,
-        ):
-            msg = await channel.fetch_message(msg.id)  # TODO: Remove this
-            record = _IndexableRecord.from_message(msg.content)
-            if not record:
-                continue
+        async with gather_group() as group:
+            # Finally, all the next_value attributes have been set, we can
+            # go through and update each record.
+            #
+            # The overall algorithm is O(2n), but it's much more scalable
+            # than trying to put the entire table into memory in order to
+            # resize it.
+            #
+            # This algorithm is pretty much infinitely scalable, if you factor
+            # out Discord's ratelimit.
+            async for msg in channel.history(
+                limit=metadata.max_records,
+                oldest_first=True,
+            ):
+                record = _IndexableRecord.from_message(msg.content)
+                if not record:
+                    continue
 
-            logger.debug(f"Handling movement of {record!r}")
-            if not record.next_value:
-                raise DatabaseCorruptionError(
-                    "all existing records after resize should have next_value",  # noqa
-                )
+                logger.debug(f"Handling movement of {record!r}")
+                if not record.next_value:
+                    raise DatabaseCorruptionError(
+                        "all existing records after resize should have next_value",  # noqa
+                    )
 
-            if record.next_value.next_value:
-                raise DatabaseCorruptionError(
-                    f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
-                )
+                if record.next_value.next_value:
+                    raise DatabaseCorruptionError(
+                        f"doubly nested next_value found: {record.next_value.next_value!r} in {record!r}"  # noqa
+                    )
 
-            content = record.next_value.model_dump_json()
-            logger.debug(f"Replacing {msg.content} with {content}")
-            await msg.edit(content=content)
+                content = record.next_value.model_dump_json()
+                logger.debug(f"Replacing {msg.content} with {content}")
+                group.add(msg.edit(content=content))
 
     async def _resize_table(self) -> None:
         """
