@@ -87,49 +87,49 @@ class Utility(commands.Cog):
     )
     async def find(
         self,
-        interaction: discord.Integration,
+        interaction: discord.Interaction,
         table: discord.TextChannel,
         column: str,
         value: str,
     ) -> None:
-        await interaction.response.send_message(
-            content=f"Searching for `{value}`..."
-        )
-
         table_info: list | None = None
         results: list | None = None
         column: str = column.lower()
         results_found: int | None = None
-        results_str: str | None = None
+        results_str: str = ""
 
-        try:
-            if table.name in self.bot.db.tables:
-                table_info = self.bot.db.tables[table.name]
+        await interaction.response.send_message(
+            content=f"Searching for `{value}`..."
+        )
 
-                if column in table_info.__disco_keys__:
-                    results = table_info.find(**{column: value})
-                    results_found = len(results)
-                    if results_found > 0:
-                        embed: discord.Embed = discord.Embed(
-                            title=f"Search Result - {results_found} Record(s) Found",
-                            color=discord.Color.blurple,
-                        )
+        if table.name in self.bot.db.tables:
+            table_info = self.bot.db.tables[table.name]
 
-                        for count, value in enumerate(results, start=1):
-                            results_str += f"**{count}**. {str(value)}\n"
+            if column in table_info.__disco_keys__:
+                results = await table_info.find(**{column: value})
+                results_found = len(results)
+                if results_found > 0:
+                    for count, value in enumerate(results, start=1):
+                        results_str += f"**{count}**. {str(value)}\n"
 
-                        embed.description(results_str)
-                        interaction.response.send_message(embed=embed)
-                    else:
-                        interaction.response.send_message(
-                            "The record could not be found."
-                        )
-            else:
-                interaction.response.send_message(
-                    "Either the table doesn't exist or the column doesn't exist."
-                )
-        except Exception as e:
-            logger.exception(e)
+                    embed: discord.Embed = discord.Embed(
+                        title=f"Search Result - {results_found} Record(s) Found",
+                        description=results_str,
+                        color=discord.Color.blurple(),
+                    )
+
+                    await interaction.edit_original_response(
+                        content="",
+                        embed=embed
+                    )
+                else:
+                    await interaction.edit_original_response(
+                        content="The record could not be found."
+                    )
+        else:
+            await interaction.edit_original_response(
+                content="Either the table doesn't exist or the column doesn't exist."
+            )
 
     @app_commands.command(
         description="Performs a left-join on two tables."
