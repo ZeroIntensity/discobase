@@ -14,7 +14,7 @@ from discobase.exceptions import DatabaseTableError
 
 @pytest_asyncio.fixture(scope="session")
 async def database():
-    db = discobase.Database("discobase test")
+    db = discobase.Database("discobase test", logging=True)
     db.login_task(os.environ["TEST_BOT_TOKEN"])
     await db.wait_ready()
     if db.guild:

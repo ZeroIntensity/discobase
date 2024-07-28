@@ -25,11 +25,21 @@ class Database:
     database bot controller.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        logging: bool = False,
+    ) -> None:
         """
         Args:
             name: Name of the Discord server that will be used as the database.
+            logging: Whether to enable logging.
         """
+        if logging:
+            logger.enable("discobase")
+        else:
+            logger.disable("discobase")
+
         self.name = name
         """Name of the Discord-database server."""
         self.bot = commands.Bot(
@@ -48,7 +58,7 @@ class Database:
         self._database_cursors: dict[str, TableCursor] = {}
         """A dictionary containing all of the table `Metadata` entries"""
         self._task: asyncio.Task[None] | None = None
-        self.bot.db = self
+        self.bot.db = self  # type: ignore
         # We need to keep a strong reference to the free-flying
         # task
         self._setup_event = asyncio.Event()
@@ -146,8 +156,6 @@ class Database:
             )
 
         await asyncio.gather(*coros)
-        logger.info("Syncing slash commands, this might take a minute.")
-        await self.bot.tree.sync()
         logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
         logger.info("Bot is ready!")
@@ -174,6 +182,8 @@ class Database:
         logger.info(
             f"Invite to server: {await self._metadata_channel.create_invite()}"
         )
+        logger.info("Syncing slash commands, this might take a minute.")
+        await self.bot.tree.sync()
 
     async def build_tables(self) -> None:
         """
@@ -318,11 +328,11 @@ class Database:
 
         Returns:
             asyncio.Task[None]: The created `asyncio.Task` object.
-            Note that the database will store this internally, so you
-            don't have to worry about losing the reference. By default,
-            this task will never get `await`ed, so this function will not
-            keep the event loop running. If you want to keep the event loop
-            running, make sure to `await` the returned task object later.
+                Note that the database will store this internally, so you
+                don't have to worry about losing the reference. By default,
+                this task will never get `await`ed, so this function will not
+                keep the event loop running. If you want to keep the event loop
+                running, make sure to `await` the returned task object later.
 
         Example:
             ```py
@@ -371,7 +381,7 @@ class Database:
 
         Returns:
             AsyncGeneratorContextManager: An asynchronous context manager.
-            See `contextlib.asynccontextmanager` for details.
+                See `contextlib.asynccontextmanager` for details.
 
         Example:
             ```py
@@ -422,7 +432,7 @@ class Database:
 
         Returns:
             Type[Table]: The same object passed to `clas` -- this is in order
-            to allow use as a decorator.
+                to allow use as a decorator.
         """
         if not issubclass(clas, Table):
             raise DatabaseTableError(
