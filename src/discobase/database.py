@@ -146,8 +146,6 @@ class Database:
             )
 
         await asyncio.gather(*coros)
-        logger.info("Syncing slash commands, this might take a minute.")
-        await self.bot.tree.sync()
         logger.info("Waiting until bot is logged in.")
         await self.bot.wait_until_ready()
         logger.info("Bot is ready!")
@@ -174,6 +172,8 @@ class Database:
         logger.info(
             f"Invite to server: {await self._metadata_channel.create_invite()}"
         )
+        logger.info("Syncing slash commands, this might take a minute.")
+        await self.bot.tree.sync()
 
     async def build_tables(self) -> None:
         """
