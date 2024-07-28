@@ -236,7 +236,6 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title,
             color=self.color,
-            description=self.content,
             type='rich',
             timestamp=dt.now()
         )
