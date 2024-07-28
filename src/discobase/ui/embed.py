@@ -242,4 +242,3 @@ class EmbedFromContent:
         )
 
         return embed
-
