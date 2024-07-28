@@ -15,7 +15,6 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from ._metadata import Metadata
-from ._util import gather_group
 from .exceptions import (DatabaseCorruptionError, DatabaseLookupError,
                          DatabaseStorageError)
 
@@ -347,15 +346,9 @@ class TableCursor:
         """
         last_message: discord.Message | None = None
 
-        async with gather_group() as group:
-            for _ in range(amount):
-                task = group.add(index_channel.send("null", silent=True))
-
-                def _cb(fut: asyncio.Task[discord.Message]):
-                    nonlocal last_message
-                    last_message = fut.result()
-
-                task.add_done_callback(_cb)
+        # Here be dragons: ratelimit makes gathering this actually worse.
+        for _ in range(amount):
+            last_message = await index_channel.send("null", silent=True)
 
         if not last_message:
             raise DatabaseCorruptionError("last_message is None somehow")
@@ -675,54 +668,51 @@ class TableCursor:
         )
         await msg.edit(content=_Record.from_data(record).model_dump_json())
 
-        async with gather_group() as group:
-            for new, old in zip(
-                record.model_dump().items(),
-                current.model_dump().items(),
-            ):
-                field = new[0]
-                if field != old[0]:
-                    raise DatabaseCorruptionError(
-                        f"field name {field} does not match {old[0]}"
-                    )
-
-                new_value = new[1]
-                old_value = old[1]
-                if new_value == old_value:
-                    logger.info("Nothing changed.")
-                    continue
-
-                channel = self._find_channel(
-                    metadata.index_channels[f"{record.__disco_name__}_{field}"]
-                )
-                hashed_field, target_index = self._as_hashed(new_value)
-                group.add(
-                    self._write_index_record(
-                        channel,
-                        target_index,
-                        hashed_field,
-                        msg.id,
-                    )
+        for new, old in zip(
+            record.model_dump().items(),
+            current.model_dump().items(),
+        ):
+            field = new[0]
+            if field != old[0]:
+                raise DatabaseCorruptionError(
+                    f"field name {field} does not match {old[0]}"
                 )
 
-                old_index = self._to_index(self._hash(old_value))
-                old_msg = await self._lookup_message(channel, old_index)
-                old_record = _IndexableRecord.from_message(old_msg.content)
-                if not old_record:
-                    raise DatabaseCorruptionError(
-                        "got null record somehow",
-                    )
+            new_value = new[1]
+            old_value = old[1]
+            if new_value == old_value:
+                logger.info("Nothing changed.")
+                continue
 
-                if len(old_record.record_ids) == 1:
-                    logger.info("We can nullify this entry.")
-                    await old_msg.edit(content="null")
-                    self.metadata.current_records -= 1
-                else:
-                    logger.info(
-                        "There are other entries with this value, only remove this ID."  # noqa
-                    )
-                    old_record.record_ids.remove(msg.id)
-                    await old_msg.edit(content=old_record.model_dump_json())
+            channel = self._find_channel(
+                metadata.index_channels[f"{record.__disco_name__}_{field}"]
+            )
+            hashed_field, target_index = self._as_hashed(new_value)
+            await self._write_index_record(
+                channel,
+                target_index,
+                hashed_field,
+                msg.id,
+            )
+
+            old_index = self._to_index(self._hash(old_value))
+            old_msg = await self._lookup_message(channel, old_index)
+            old_record = _IndexableRecord.from_message(old_msg.content)
+            if not old_record:
+                raise DatabaseCorruptionError(
+                    "got null record somehow",
+                )
+
+            if len(old_record.record_ids) == 1:
+                logger.info("We can nullify this entry.")
+                await old_msg.edit(content="null")
+                self.metadata.current_records -= 1
+            else:
+                logger.info(
+                    "There are other entries with this value, only remove this ID."  # noqa
+                )
+                old_record.record_ids.remove(msg.id)
+                await old_msg.edit(content=old_record.model_dump_json())
 
         return msg
 
@@ -820,19 +810,13 @@ class TableCursor:
         logger.debug(f"Got IDs: {sets_list}")
         records: list[Table] = []
 
-        async with gather_group() as group:
-            for record_ids in sets_list:
-                for record_id in record_ids:
-                    task = group.add(main_table.fetch_message(record_id))
-
-                    def _cb(fut: asyncio.Task[discord.Message]):
-                        message = fut.result()
-                        record = _Record.model_validate_json(message.content)
-                        entry = record.decode_content(table)
-                        entry.__disco_id__ = message.id
-                        records.append(entry)
-
-                    task.add_done_callback(_cb)
+        for record_ids in sets_list:
+            for record_id in record_ids:
+                message = await main_table.fetch_message(record_id)
+                record = _Record.model_validate_json(message.content)
+                entry = record.decode_content(table)
+                entry.__disco_id__ = message.id
+                records.append(entry)
 
         return records
 
