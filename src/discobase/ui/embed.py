@@ -89,7 +89,7 @@ class EmbedFromContent:
     def __init__(
             self,
             title: str,
-            content: list[str] | dict,
+            content: list[str] | dict | list[dict],
             style: "EmbedStyle",
             headers: list[str] | None = None
     ) -> None:
