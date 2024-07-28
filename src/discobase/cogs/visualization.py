@@ -181,6 +181,9 @@ class Visualization(commands.Cog):
     async def schema(
         self, interaction: discord.Interaction, table: discord.TextChannel
     ) -> None:
+        await interaction.response.send_message(
+            content=f"Getting schema for {table.name}..."
+        )
         table_info: list | None = None
         table_schema: dict | None = None
         schemas: list[dict] | None = None
@@ -198,10 +201,13 @@ class Visualization(commands.Cog):
                 style=em.EmbedStyle.SCHEMA,
             ).create()
 
-            await interaction.response.send_message(embed=embed_gen)
+            await interaction.edit_original_response(
+                content="",
+                embed=embed_gen
+            )
         else:
-            await interaction.response.send_message(
-                "There is no table with that name, try creating a table."
+            await interaction.edit_original_response(
+                content="There is no table with that name, try creating a table."
             )
 
 
