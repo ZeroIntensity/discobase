@@ -18,13 +18,14 @@ class Bookmark(discord.app_commands.Group):
 
     @discord.app_commands.command(name="get_bookmarks", description="Retrieve all of your bookmarks")
     async def get_bookmarks(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True, thinking=True)
         records = await db_interactions.get(db, interaction)
         if len(records) == 0:
             await interaction.followup.send("You have not bookmarked any messages")
         else:
             buttons = bookmark_ui.ArrowButtons(records=records)
             await interaction.followup.send(view=buttons, embed=buttons.content[0], ephemeral=True)
+
 
     @discord.app_commands.command(name="clean_database")
     async def clean_database(self, interaction: discord.Interaction):

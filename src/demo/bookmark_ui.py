@@ -121,11 +121,23 @@ class ArrowButtons(discord.ui.View):
         else:
             self.position -= 1
 
+        # set a variable for left button
+        left_button: discord.Button = [x for x in self.children if x.custom_id == 'l_button'][0]
+        # check if we're not on the first page, if yes then enable left button
+        if not self.position == 0:
+            left_button.disabled = False
+
+        # set the right button to a variable
+        right_button: discord.Button = [x for x in self.children if x.custom_id == 'r_button'][0]
+        # check if we're not on the last page, if yes then enable right button
+        if not self.position == self.pages - 1:
+            right_button.disabled = False
+
         # Edit the message if there is still data. otherwise delete it.
         if self.pages > 0:
             await interaction.response.edit_message(embed=self.content[self.position], view=self)
         else:
-            await interaction.message.delete() # This is 404ing and I can't think of a good way to fix it right now.
+            await interaction.response.edit_message(content="You have no more saved bookmarks", embed=None, view=None)
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
