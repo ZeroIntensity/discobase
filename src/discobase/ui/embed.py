@@ -224,7 +224,7 @@ class EmbedFromContent:
             )
 
         return embed
-    
+
     def _default_display(self) -> discord.Embed:
         """
         Creates an embed with a default visual style.
