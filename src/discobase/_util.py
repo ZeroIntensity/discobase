@@ -5,6 +5,7 @@ from collections.abc import Coroutine
 from contextlib import asynccontextmanager
 from typing import Any, TypeVar
 
+import discord
 from loguru import logger
 
 __all__ = "gather_group", "GatherGroup", "free_fly"
@@ -17,7 +18,16 @@ class GatherGroup:
         self.tasks: list[asyncio.Task] = []
 
     def add(self, awaitable: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
-        task = asyncio.create_task(awaitable)
+        async def inner_coro():
+            while True:
+                try:
+                    return await awaitable
+                except discord.HTTPException as e:
+                    if e.code == 429:
+                        logger.warning("Ratelimited! Retrying...")
+                        await asyncio.sleep(1)
+
+        task = asyncio.create_task(inner_coro())
         self.tasks.append(task)
         return task
 
