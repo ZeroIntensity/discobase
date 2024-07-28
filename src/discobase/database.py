@@ -21,7 +21,7 @@ from .table import Table
 __all__ = ("Database", "References")
 
 T = TypeVar("T", bound=Type[Table])
-SupportsDiscoHash = Union[str, int, Iterable["SupportsDiscoHash"]]
+
 
 
 def _validate_ref(
