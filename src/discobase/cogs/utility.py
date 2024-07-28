@@ -73,20 +73,51 @@ class Utility(commands.Cog):
             content=f"I have inserted `{data}` into `{table_name}` table."
         )
 
-    @app_commands.command(description="Modifies a record with a new value.")
+    @app_commands.command(description="Finds a record with the specific column and value in the table.")
     @app_commands.describe(
-        table="Choose the database you want to perform an update on.",
-        field="Choose the key you want to update.",
-        new_value="Your new information.",
+        table="The name of the table the column is in.",
+        column="The name of the column.",
+        value="The value to search for.",
     )
-    async def update(
+    async def find(
         self,
-        inter: discord.Interaction,
+        interaction: discord.Integration,
         table: discord.TextChannel,
-        field: str,
-        new_value: str,
+        column: str,
+        value: str,
     ) -> None:
-        pass
+
+        table_info: list | None = None
+        results: list | None = None
+        column: str = column.lower()
+        results_found: int | None = None
+        results_str: str | None = None
+
+        if table.name in self.bot.db.tables:
+            table_info = self.bot.db.tables[table.name]
+
+            if column in table_info.__disco_keys__:
+                results = table_info.find(**{column: value})
+                results_found = len(results)
+                if results_found > 0:
+                    embed: discord.Embed = discord.Embed(
+                        title=f"Search Result - {results_found} Record(s) Found",
+                        color=discord.Color.blurple,
+                    )
+
+                    for count, value in enumerate(results, start=1):
+                        results_str += f"**{count}**. {str(value)}\n"
+
+                    embed.description(results_str)
+                    interaction.response.send_message(embed=embed)
+                else:
+                    interaction.response.send_message(
+                        "The record could not be found."
+                    )
+        else:
+            interaction.response.send_message(
+                "Either the table doesn't exist or the column doesn't exist."
+            )
 
     @app_commands.command(description="Performs a left-join on two tables.")
     @app_commands.describe(key="The shared primary key to join the tables on.")
