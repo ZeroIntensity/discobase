@@ -182,6 +182,7 @@ async def test_update(database: discobase.Database):
     assert len(await UpdateTest.find(foo="test again")) == 1
 
 
+@pytest.mark.asyncio(scope="session")
 async def test_delete(database: discobase.Database):
     @database.table
     class DeleteTest(discobase.Table):

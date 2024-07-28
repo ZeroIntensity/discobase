@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from typing import (TYPE_CHECKING, Any, ClassVar, Literal, Optional, Set,
                     overload)
 
+import discord
 from pydantic import BaseModel, ConfigDict
 from typing_extensions import Self, Unpack
+
+from ._util import free_fly
 
 if TYPE_CHECKING:
     from .database import Database
@@ -58,7 +62,7 @@ class Table(BaseModel):
                 f"{cls.__name__} is not ready, you might want to add a call to build_tables()",  # noqa
             )
 
-    async def save(self) -> None:
+    def save(self) -> asyncio.Task[discord.Message]:
         """
         Save the entry to the database as a new record.
 
@@ -84,8 +88,14 @@ class Table(BaseModel):
             raise DatabaseStorageError(
                 "this entry has already been written, did you mean to call update()?",  # noqa
             )
-        msg = await self.__disco_cursor__.add_record(self)
-        self.__disco_id__ = msg.id
+        task = free_fly(self.__disco_cursor__.add_record(self))
+
+        def _cb(fut: asyncio.Task[discord.Message]) -> None:
+            msg = fut.result()
+            self.__disco_id__ = msg.id
+
+        task.add_done_callback(_cb)
+        return task
 
     def _ensure_written(self) -> None:
         if self.__disco_id__ == -1:
@@ -93,7 +103,7 @@ class Table(BaseModel):
                 "this entry has not been written, did you mean to call save()?",  # noqa
             )
 
-    async def update(self) -> None:
+    def update(self) -> asyncio.Task[discord.Message]:
         """
         Update the entry in-place.
 
@@ -118,26 +128,30 @@ class Table(BaseModel):
         self._ensure_db()
         self._ensure_written()
         assert self.__disco_cursor__
-        await self.__disco_cursor__.update_record(self)
+        if self.__disco_id__ == -1:
+            raise DatabaseStorageError(
+                "this entry has not been written, did you mean to call save()?",  # noqa
+            )
+        return free_fly(self.__disco_cursor__.update_record(self))
 
-    async def commit(self) -> None:
+    def commit(self) -> asyncio.Task[discord.Message]:
         """
         Save the current entry, or update it if it already exists in the
         database.
         """
         if self.__disco_id__ == -1:
-            await self.save()
+            return self.save()
         else:
-            await self.update()
+            return self.update()
 
-    async def delete(self) -> None:
+    def delete(self) -> asyncio.Task[None]:
         """
         Delete the current entry from the database.
         """
 
         self._ensure_written()
         assert self.__disco_cursor__
-        await self.__disco_cursor__.delete_record(self)
+        return free_fly(self.__disco_cursor__.delete_record(self))
 
     @classmethod
     async def find(cls, **kwargs: Any) -> list[Self]:
