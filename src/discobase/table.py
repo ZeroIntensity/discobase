@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import (TYPE_CHECKING, Any, ClassVar, Literal, Optional, Set,
                     overload)
 
-from pydantic import BaseModel
-from typing_extensions import Self
+from pydantic import BaseModel, ConfigDict
+from typing_extensions import Self, Unpack
 
 if TYPE_CHECKING:
     from .database import Database
@@ -19,16 +19,27 @@ __all__ = ("Table",)
 # Note that we can't use 3.10+ type[] syntax
 # here, since Pydantic can't handle it
 class Table(BaseModel):
-    __disco_database__: ClassVar[Optional[Database]] = None
+    __disco_database__: ClassVar[Optional[Database]]
     """Attached `Database` object. Set by the `table()` decorator."""
-    __disco_cursor__: ClassVar[Optional[TableCursor]] = None
+    __disco_cursor__: ClassVar[Optional[TableCursor]]
     """Internal table cursor, set at initialization time."""
-    __disco_keys__: ClassVar[Set[str]] = set()
+    __disco_keys__: ClassVar[Set[str]]
     """All keys of the table, this may not change once set by `table()`."""
-    __disco_name__: ClassVar[str] = "_notset"
+    __disco_name__: ClassVar[str]
     """Internal name of the table. Set by the `table()` decorator."""
     __disco_id__: int = -1
     """Message ID of the record. This is only present if it was saved."""
+
+    def __init__(self, /, **data: Any) -> None:
+        super().__init__(**data)
+        self.__disco_id__ = -1
+
+    def __init_subclass__(cls, **kwargs: Unpack[ConfigDict]) -> None:
+        super().__init_subclass__(**kwargs)
+        cls.__disco_database__ = None
+        cls.__disco_cursor__ = None
+        cls.__disco_keys__ = set()
+        cls.__disco_name__ = "_notset"
 
     @classmethod
     def _ensure_db(cls) -> None:

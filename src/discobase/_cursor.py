@@ -826,6 +826,7 @@ class TableCursor:
             then the table already existed.
         """
 
+        logger.debug(f"create_table called with table: {table!r}")
         name = table.__disco_name__
         existing_metadata: Metadata | None = None
 
@@ -836,6 +837,9 @@ class TableCursor:
                 raise DatabaseCorruptionError("got invalid metadata") from e
 
             if parsed_meta.name == name:
+                logger.debug(
+                    f"Found existing metadata for table {name}: {parsed_meta}"
+                )
                 existing_metadata = parsed_meta
                 break
 
@@ -843,7 +847,7 @@ class TableCursor:
             set(existing_metadata.keys) != table.__disco_keys__
         ):
             logger.error(
-                f"stored keys: {', '.join(existing_metadata.keys)}, table keys: {', '.join(table.__disco_keys__)}"  # noqa
+                f"stored keys: {', '.join(existing_metadata.keys)} -- table keys: {', '.join(table.__disco_keys__)}"  # noqa
             )
             raise DatabaseCorruptionError(f"schema for table {name} changed")
 

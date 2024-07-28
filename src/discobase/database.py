@@ -167,10 +167,12 @@ class Database:
         """
         logger.info("Initializing the bot.")
         # Load external commands
-        coros: list[Coroutine] = []
+        coros: list[asyncio.Task] = []
         for module in iter_modules(path=["cogs"], prefix="cogs."):
             logger.debug(f"Loading module with cog: {module}")
-            coros.append(self.bot.load_extension(module.name))
+            coros.append(
+                asyncio.create_task(self.bot.load_extension(module.name))
+            )
 
         await asyncio.gather(*coros)
         logger.info("Syncing slash commands, this might take a minute.")
@@ -236,7 +238,7 @@ class Database:
 
         self._metadata_channel = await self._metadata_init()
         tasks = [
-            asyncio.create_task(
+            asyncio.ensure_future(
                 TableCursor.create_table(
                     table,
                     self._metadata_channel,
