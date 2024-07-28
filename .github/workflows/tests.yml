@@ -4,9 +4,13 @@ on:
     push:
         branches:
             - main
+        paths:
+            - src/discobase/**
     pull_request:
         branches:
             - main
+        paths:
+            - src/discobase/**
 
 concurrency:
     group: test-${{ github.head_ref }}
