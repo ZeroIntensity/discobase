@@ -55,4 +55,4 @@ The slash command `/find`will ask for the following information before performin
 `/find Games Genre Action`
 
 ### Limitation
-There are no limitations for this command.
+The `description` field in a rich embed is limited to `4096` characters.
