@@ -23,3 +23,14 @@ The `/schema` operation takes in the name of your table as input and outputs inf
 Considering the limit of fields is 25 on discord. The command can only show up to 25 columns, so we'll signify the limit as `field_length = 25` forming the following inequality: 
 
 **C** <= `field_length` where **C** is the number of columns.
+
+## Update a Column's Value
+Users can modify the arbitrary value they have set to a specific column in their data; however, the data type has to be consistent with the column's data type. 
+
+The `/update` slash command takes the following parameters: the name of the table, the name of the column, the old value, and the new value that should replace the old one.
+
+### Example
+`/update Games Genre Puzzle Action`
+
+### Limitation
+The user is disallowed from entering a new value that is not consistent with the predefined column's data type.
