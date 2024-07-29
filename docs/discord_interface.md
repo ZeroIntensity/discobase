@@ -45,3 +45,14 @@ Knowing pertinent information such as how many tables are in my database and wha
 
 ### Limitation
 There are no limitations for this command.
+
+## Perform a Search on your Data
+Finding information in your data is an essential task.
+
+The slash command `/find`will ask for the following information before performing a search such as the name of the table, the name of the column, and the value you want to look up.
+
+### Example
+`/find Games Genre Action`
+
+### Limitation
+There are no limitations for this command.
