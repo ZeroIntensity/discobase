@@ -32,7 +32,9 @@ Users can modify the arbitrary value they have set to a specific column in their
 The `/update` slash command takes the following parameters: the name of the table, the name of the column, the old value, and the new value that should replace the old one.
 
 ### Example
-`/update Games Genre Puzzle Action`
+`/update Games name Hit Man Absolution Tomb Raider`
+
+![update](assets/update_cmd.gif)
 
 ### Limitation
 The user is disallowed from entering a new value that is not consistent with the predefined column's data type.
@@ -44,6 +46,8 @@ Knowing pertinent information such as how many tables are in my database and wha
 
 ### Example
 `/tablestats Games`
+
+![table_stats](assets/tablestats_cmd.gif)
 
 ### Limitation
 There are no limitations for this command.
