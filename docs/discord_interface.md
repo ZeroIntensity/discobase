@@ -58,7 +58,9 @@ Finding information in your data is an essential task.
 The slash command `/find`will ask for the following information before performing a search such as the name of the table, the name of the column, and the value you want to look up.
 
 ### Example
-`/find Games Genre Action`
+`/find Games name Batman`
+
+![find_cmd](assets/find_cmd.gif)
 
 ### Limitation
 The `description` field in a rich embed is limited to `4096` characters.
