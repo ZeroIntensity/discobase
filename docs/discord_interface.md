@@ -45,7 +45,7 @@ Knowing pertinent information such as how many tables are in my database and wha
 `/tablestats` iterates over your database's tables to display the names you've assigned to them and it tallies up a count of how many you've made.
 
 ### Example
-`/tablestats Games`
+`/tablestats`
 
 ![table_stats](assets/tablestats_cmd.gif)
 
