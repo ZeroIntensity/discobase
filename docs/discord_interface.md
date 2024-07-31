@@ -91,7 +91,7 @@ The `/insert` command allows you to add data to your table directly from your di
 ### Usage:
 `/insert [table] [record]`
 - **Table:** The table you want to insert a new record into.
-- **Record:** The record you want to insert, formatted as a json. Use the columns as keys, and record data as values.
+- **Record:** The record you want to insert, formatted as JSON. Use the columns as keys, and record data as values.
 ### Example:
 `/insert games {"name": "rayman legends", "genre": "platformer"}`
 
