@@ -153,4 +153,4 @@ The `/column` command displays a column from a page in a neat, paginated rich em
 ![column_cmd](assets/column_cmd.gif)
 
 ### Limitation
-Embed descriptions have a character limit of 4096, so some particularly large data may not fit within the bounds.
+Embed descriptions have a character limit of `4096`, so some particularly large data may not fit within the bounds.
