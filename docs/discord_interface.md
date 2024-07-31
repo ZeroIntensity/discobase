@@ -35,6 +35,13 @@ Users can modify the arbitrary value they have set to a specific column in their
 
 The `/update` slash command takes the following parameters: the name of the table, the name of the column, the old value, and the new value that should replace the old one.
 
+### Usage
+`/update [table] [column] [current_value] [new_value]`
+- **Table:** The table you want to perform an update on.
+- **Column:** The column you want to update.
+- **Current Value**: The current value saved in the column.
+- **New Value**: Your new information.
+
 ### Example
 `/update Games name Hit Man Absolution Tomb Raider`
 
