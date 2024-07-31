@@ -67,10 +67,16 @@ Knowing pertinent information such as how many tables are in my database and wha
 ### Limitation
 There are no limitations for this command.
 
-## Perform a Search on your Data
+## Perform a Search on Your Data
 Finding information in your data is an essential task.
 
 The slash command `/find`will ask for the following information before performing a search such as the name of the table, the name of the column, and the value you want to look up.
+
+### Usage
+`/find [table] [column] [current_value]`
+- **Table:** The name of the table the column is in.
+- **Column:** The name of the column.
+- **Current Value**: The value to search for.
 
 ### Example
 `/find Games name Batman`
@@ -78,7 +84,7 @@ The slash command `/find`will ask for the following information before performin
 ![find_cmd](assets/find_cmd.gif)
 
 ### Limitation
-The `description` field in a rich embed is limited to `4096` characters.
+The `description` field in a rich embed is limited to `4096` characters. The searching being performed on the data only looks for an exact match.
 
 ## Inserting a New Record Into Your Table
 The `/insert` command allows you to add data to your table directly from your discord database server, saving you from having to restart your bot to add additional records.
