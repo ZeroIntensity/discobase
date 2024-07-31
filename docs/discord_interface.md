@@ -16,6 +16,10 @@ Checkout the data type for the columns in your table before performing `insert` 
 
 The `/schema` operation takes in the name of your table as input and outputs information such as the names of columns and their datatypes you have set them to.
 
+### Usage
+`/schema [table]`
+- **Table:** The name of the table you've created.
+
 ### Example
 `/schema Games`
 
