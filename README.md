@@ -1,25 +1,57 @@
-# Discobase
+<div align="center">
+    <img src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" alt="Discobase" width=250 height=auto />
+</div>
 
-*This is a temporary README*
+</div>
+**Python Discord Codejam 2024 Submission: Spunky Sputniks**
 
 ## Installation
 
-### One-Time Installs
+### Library
 
-You need to run the following commands after running locally:
-
-```
-$ python -m venv .venv
-$ source .venv/bin/activate
-$ pip install pre-commit
-$ pre-commit install
-$ pip install hatch
-$ pip install -e .
+```bash
+$ pip install discobase
 ```
 
-### Other Commands
+### Demo Bot
 
-- `source .venv/bin/activate`: activates the virtual environment (for Mac and Linux).
-- `.\.venv\Scripts\activate`: activates the virtual environ (for Windows).
-- `hatch test`: runs unit tests. Note that you need the `TEST_BOT_TOKEN` environment variable set.
-- `ruff format`: Formats your code.
+You can add the demo bot to a server with [this integration](https://discord.com/oauth2/authorize?client_id=1268247436699238542&permissions=8&integration_type=0&scope=bot), or self-host it using the following commands:
+
+```bash
+$ git clone https://github.com/zerointensity/discobase
+$ cd discobase/src/demo
+$ export DB_BOT_TOKEN="first bot token"
+$ export BOOKMARK_BOT_TOKEN="second bot token"
+$ python3 main.py
+```
+
+## Quickstart
+
+```py
+import asyncio
+import discobase
+
+db = discobase.Database("My database")
+
+@db.table
+class User(discobase.Table):
+    name: str
+    password: str
+
+async def main():
+    async with db.conn("My bot token"):
+        admin = await User.find(name="admin")
+        if not admin:
+            User.save(name="admin", password="admin")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Documentation
+
+Documentation is available [here](https://discobase.zintensity.dev)
+
+## License
+
+`discobase` is distributed under the `MIT` license.
