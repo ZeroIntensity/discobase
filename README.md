@@ -1,8 +1,9 @@
 <div align="center">
-    <img src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" alt="Discobase" width=250 height=auto />
+    <img src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" alt="Discobase" width=700 height=auto />
 </div>
 
 </div>
+
 **Python Discord Codejam 2024 Submission: Spunky Sputniks**
 
 ## Installation
