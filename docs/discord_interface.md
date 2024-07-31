@@ -50,10 +50,14 @@ The `/update` slash command takes the following parameters: the name of the tabl
 ### Limitation
 The user is disallowed from entering a new value that is not consistent with the predefined column's data type.
 
-## Retrieve Statistics Concerning your Database
+## Retrieve Statistics Concerning Your Database
 Knowing pertinent information such as how many tables are in my database and what are the names of each table are easily answered using this command.
 
 `/tablestats` iterates over your database's tables to display the names you've assigned to them and it tallies up a count of how many you've made.
+
+### Usage
+`/tablestats`
+- There are no parameters for this command.
 
 ### Example
 `/tablestats`
