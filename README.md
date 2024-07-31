@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
 ## Documentation
 
-Documentation is available [here](https://discobase.zintensity.dev)
+Documentation is available [here](https://discobase.zintensity.dev).
 
 ## License
 

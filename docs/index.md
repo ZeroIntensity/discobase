@@ -33,7 +33,7 @@ You can also install the latest version:
 $ pip install discobase
 ```
 
-!!! warning
+!!! bug
 
     The stable version includes the admin commands for your database, but lacks <3.11 support, while the latest version is the opposite, as it has down to 3.8 support, but lacks admin commands. This is due to a last-minute oversight on our part, but there is nothing we can do at this point.
 
