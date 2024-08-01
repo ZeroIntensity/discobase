@@ -3,6 +3,10 @@ hide:
     - navigation
 ---
 
+<div>
+    <img alt="discobase logo" src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" width=500>
+</div>
+
 # Discobase
 
 ## What is Discobase?
