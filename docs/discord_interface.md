@@ -30,8 +30,6 @@ The `/schema` operation takes in the name of your table as input and outputs inf
 
 ![schema](assets/schema_cmd.gif)
 
-### Limitation
-
 !!! warning "Limitation"
 
     -   Considering the limit of fields is 25 on discord. The command can only show up to 25 columns, so we'll signify the limit as `field_length = 25` forming the following inequality: **C** <= `field_length` where **C** is the number of columns.
