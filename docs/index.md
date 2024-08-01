@@ -66,7 +66,7 @@ Per the presentation requirements, here's what each team member contributed:
 -   Everyone: Laid out the concepts for the core implementation and how it would work. You can see [this issue](https://github.com/ZeroIntensity/discobase/issues/4) for the discussion.
 -   [Zero](https://github.com/zerointensity/) and [Rubiks](https://github.com/Rubiks14): Implemented the core library functionality.
 -   [Skye](https://github.com/enskyeing) and [Gimpy](https://github.com/Gimpy3887): Built all the admin commands based on the core library.
--   [Rubiks](https://github.com/Rubiks14): Wrote the demo bot as shown in the [demonstration section](https://discobase.zintensity.dev/demonstration/)
+-   [Rubiks](https://github.com/Rubiks14): Wrote the demo bot as shown in the [demonstration section](https://discobase.zintensity.dev/demonstration/).
 
 ## Copyright
 
