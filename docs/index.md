@@ -11,7 +11,7 @@ hide:
 
 This year, the theme was "information overload." We took that to heart, and made a database library that turns Discord into a database through various algorithms, and wrote a library to interact with it, either programatically or through a Discord interface, as well as another bot to show the library off. Truly, we're overloading a Discord server with _lots_ of information.
 
-We used [discord.py](https://discordpy.readthedocs.io/) to interact with Discord (and turn it into a data store), and used [Pydantic](https://docs.pydantic.dev/) for serializing database models.
+We used [discord.py](https://discordpy.readthedocs.io/) to interact with Discord and turn it into a data store, and used [Pydantic](https://docs.pydantic.dev/) for serializing database models.
 
 ## Features
 

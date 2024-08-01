@@ -52,7 +52,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-`login()` has a bit of a pitfall: it blocks the function from proceeding (as in, the `await` never finishes, at least without some magic). In that case, you have two options: `login_task()` and `conn`. Let's start with `login_task`, which runs the connection in the background as a free-flying task.
+`login()` has a bit of a pitfall: it blocks the function from proceeding (as in, the `await` never finishes, at least without some magic). In that case, you have two options: `login_task()` and `conn()`. Let's start with `login_task`, which runs the connection in the background as a free-flying task.
 
 !!! note
 
@@ -192,7 +192,7 @@ Great, now `User` is visible to our `Database` object!
 
 ### Late Tables
 
-At first glance, it may look like `@db.table` will set everything up for you -- this is not the case. In fact, `@db.table` simply sets a few attributes, but the key is that it _marks_ the type as a schema. We can't do any actual initialization until the bot is logged in, so initialization happens _then_.
+At first glance, it may look like `@db.table()` will set everything up for you -- this is not the case. In fact, `@db.table()` simply sets a few attributes, but the key is that it _marks_ the type as a schema. We can't do any actual initialization until the bot is logged in, so initialization happens _then_.
 
 For example, the following would cause some errors if we try to use the table, since we use our table after the bot has already been initialized:
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-OK, so what's the fix? The `table()` decorator still _marks_ the `User` type as part of the database in the above example, so all we need to do is tell the database to do it's table building a second time -- we can do this through the `build_tables()` method. Our fixed version of the example above would look like:
+OK, so what's the fix? The `table()` decorator still _marks_ the `User` type as part of the database in the above example, so all we need to do is tell the database to do it's table construction a second time -- we can do this through the `build_tables()` method. Our fixed version of the example above would look like:
 
 ```py
 import discobase
@@ -276,9 +276,11 @@ def signup(username: str, password: str):
     return "..."
 ```
 
+If we were to `await` the result of `save()` above,
+
 ## Querying
 
-We can look up an instance of it via `find` (or `find_unique`, if you want a unique database entry):
+We can look up an instance of it via `find()` (or `find_unique()`, if you want a unique database entry):
 
 ```py
 async def main():
@@ -292,7 +294,7 @@ Note that this works in a whitelist manner -- as in, we search for values in the
 
 ### Unique Entries
 
-As mentioned above, you can also use `find_unique` to get a unique entry:
+As mentioned above, you can also use `find_unique()` to get a unique entry:
 
 ```py
 async def main():
@@ -302,8 +304,12 @@ async def main():
 
 By default, `find_unique` is set to strict mode, which ensures the following:
 
--   The instance actually exists, and an exception is raised if the record wasn't found (_i.e._, `find_unique` cannot return `None` when strict mode is enabled.)
+-   The instance actually exists, and an exception is raised if the record wasn't found (_i.e._, `find_unique()` cannot return `None` when strict mode is enabled.)
 -   Only one of the entry was found. If strict mode is disabled and multiple entries are found, the first entry is returned. Otherwise, an exception is thrown.
+
+!!! info
+
+    This is type safe through `@typing.overload()` -- if you pass `strict=True`, the signature of `find_unique()` will not hint a return value that can be `None`.
 
 ## Updating
 
