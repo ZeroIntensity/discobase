@@ -35,7 +35,7 @@ However, this only enables the Discobase logging, it does _not_ enable the loggi
 
 ## Logging in
 
-It's worth noting that the `Database` constructor itself doesn't actually initialize the server. If we want to do anything useful, we need to log in -- _that's_ when the server gets initialized.
+It's worth noting that the `Database` constructor itself doesn't actually initialize the server. If we want to do anything useful, we need to log in&mdash;_that's_ when the server gets initialized.
 
 There are a few methods to log in, that depend on your use case, the simplest being `login()`:
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-`login()` has a bit of a pitfall: it blocks the function from proceeding (as in, the `await` never finishes, at least without some magic). In that case, you have two options: `login_task()` and `conn`. Let's start with `login_task`, which runs the connection in the background as a free-flying task.
+`login()` has a bit of a pitfall: it blocks the function from proceeding (as in, the `await` never finishes, at least without some magic). In that case, you have two options: `login_task()` and `conn()`. Let's start with `login_task`, which runs the connection in the background as a free-flying task.
 
 !!! note
 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Notice the lack of an `await` before `db.login_task()` -- that's intentional, and we'll talk about that more in a moment.
+Notice the lack of an `await` before `db.login_task()`&mdash;that's intentional, and we'll talk about that more in a moment.
 
 !!! warning
 
@@ -192,7 +192,7 @@ Great, now `User` is visible to our `Database` object!
 
 ### Late Tables
 
-At first glance, it may look like `@db.table` will set everything up for you -- this is not the case. In fact, `@db.table` simply sets a few attributes, but the key is that it _marks_ the type as a schema. We can't do any actual initialization until the bot is logged in, so initialization happens _then_.
+At first glance, it may look like `@db.table()` will set everything up for you&mdash;this is not the case. In fact, `@db.table()` simply sets a few attributes, but the key is that it _marks_ the type as a schema. We can't do any actual initialization until the bot is logged in, so initialization happens _then_.
 
 For example, the following would cause some errors if we try to use the table, since we use our table after the bot has already been initialized:
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-OK, so what's the fix? The `table()` decorator still _marks_ the `User` type as part of the database in the above example, so all we need to do is tell the database to do it's table building a second time -- we can do this through the `build_tables()` method. Our fixed version of the example above would look like:
+OK, so what's the fix? The `table()` decorator still _marks_ the `User` type as part of the database in the above example, so all we need to do is tell the database to do it's table construction a second time&mdash;we can do this through the `build_tables()` method. Our fixed version of the example above would look like:
 
 ```py
 import discobase
@@ -245,7 +245,7 @@ if __name__ == "__main__":
 
 ## Saving
 
-Now, let's write to the database -- we can do this via calling `save()` on an instance of our schema type:
+Now, let's write to the database&mdash;we can do this via calling `save()` on an instance of our schema type:
 
 ```py
 import discobase
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Note that in the above, we used `await` with `save()`. This isn't actually required, since `save()` returns a `Task`, not a coroutine! In many cases, you don't need to save the record right then and there, and you can run it as a background task. This is especially important when it comes to Discobase -- the ratelimit can make saving very slow, so it might be useful to save in the background and not block the current function. For example, if you were to use Discobase in a web application:
+Note that in the above, we used `await` with `save()`. This isn't actually required, since `save()` returns a `Task`, not a coroutine! In many cases, you don't need to save the record right then and there, and you can run it as a background task. This is especially important when it comes to Discobase&mdash;the ratelimit can make saving very slow, so it might be useful to save in the background and not block the current function. For example, if you were to use Discobase in a web application:
 
 ```py
 @app.get("/signup")
@@ -276,9 +276,11 @@ def signup(username: str, password: str):
     return "..."
 ```
 
+If we were to `await` the result of `save()` above,
+
 ## Querying
 
-We can look up an instance of it via `find` (or `find_unique`, if you want a unique database entry):
+We can look up an instance of it via `find()` (or `find_unique()`, if you want a unique database entry):
 
 ```py
 async def main():
@@ -288,11 +290,11 @@ async def main():
             print(f"Name: {user.name}, password: {user.password}")
 ```
 
-Note that this works in a whitelist manner -- as in, we search for values in the query, not get everything and exclude those that don't match it. However, calling `find()` with nothing is a special case that gets every entry in the table (note that this is a slow operation).
+Note that this works in a whitelist manner&mdash;as in, we search for values in the query, not get everything and exclude those that don't match it. However, calling `find()` with nothing is a special case that gets every entry in the table (note that this is a slow operation).
 
 ### Unique Entries
 
-As mentioned above, you can also use `find_unique` to get a unique entry:
+As mentioned above, you can also use `find_unique()` to get a unique entry:
 
 ```py
 async def main():
@@ -302,12 +304,16 @@ async def main():
 
 By default, `find_unique` is set to strict mode, which ensures the following:
 
--   The instance actually exists, and an exception is raised if the record wasn't found (_i.e._, `find_unique` cannot return `None` when strict mode is enabled.)
+-   The instance actually exists, and an exception is raised if the record wasn't found (_i.e._, `find_unique()` cannot return `None` when strict mode is enabled.)
 -   Only one of the entry was found. If strict mode is disabled and multiple entries are found, the first entry is returned. Otherwise, an exception is thrown.
+
+!!! info
+
+    This is type safe through `@typing.overload()`&mdash;if you pass `strict=True`, the signature of `find_unique()` will not hint a return value that can be `None`.
 
 ## Updating
 
-It's worth noting that `save()` can only be used on non-saved instances -- as in, they haven't had `save()` called on them already. Instances created by their constructor manually (for example, calling `User(...)` above) are _not_ saved, while objects returned by something like `find` are considered to be saved, as they are already in the database.
+It's worth noting that `save()` can only be used on non-saved instances&mdash;as in, they haven't had `save()` called on them already. Instances created by their constructor manually (for example, calling `User(...)` above) are _not_ saved, while objects returned by something like `find` are considered to be saved, as they are already in the database.
 
 So what about when you want to update an existing record? For that, you should call `update()`, which updates an existing record in-place. For example, if you wanted to change the record from the previous example:
 
@@ -326,6 +332,19 @@ peter = await User.find_unique(name="Peter")
 peter.password = "barfoo"
 peter.update()  # Run this in the background
 ```
+
+### Deleting
+
+You can also delete a saved record via the `delete()` method:
+
+```py
+async def main():
+    async with db.conn("My bot token..."):
+        peter = await User.find_unique(name="Peter")
+        peter.delete()
+```
+
+Per `update()` and `save()`, this returns a `Task` that can be awaited or ran in the background.
 
 ### Committing
 
