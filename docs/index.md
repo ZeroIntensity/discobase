@@ -7,8 +7,6 @@ hide:
     <img alt="discobase logo" src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" width=500>
 </div>
 
-# Discobase
-
 ## What is Discobase?
 
 **Python Discord Codejam 2024**
