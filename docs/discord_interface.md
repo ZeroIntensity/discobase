@@ -107,14 +107,14 @@ The slash command `/find`will ask for the following information before performin
 
 The `/insert` command allows you to add data to your table directly from your discord database server, saving you from having to restart your bot to add additional records.
 
-### Usage:
+### Usage
 
 `/insert [table] [record]`
 
 -   **Table:** The table you want to insert a new record into.
 -   **Record:** The record you want to insert, formatted as JSON. Use the columns as keys, and record data as values.
 
-### Example:
+### Example
 
 `/insert games {"name": "rayman legends", "genre": "platformer"}`
 
@@ -124,14 +124,14 @@ The `/insert` command allows you to add data to your table directly from your di
 
 The `/delete` command allows you to delete a record from your table within your Discord database server. Just like `/insert`, it saves you from having to restart your bot just to delete a record.
 
-### Usage:
+### Usage
 
 `/delete [table] [record]`
 
 -   **Table:** The table you want to delete a record from.
 -   **Record:** The record you want to delete, formatted as a json. Use the columns as keys, and record data as values.
 
-### Example:
+### Example
 
 `/delete games {"name": "rayman legends", "genre": "platformer"}`
 
@@ -141,7 +141,7 @@ The `/delete` command allows you to delete a record from your table within your 
 
 Ever had a large database that you simply do not know what to do with anymore? The `/reset` command makes it easy to remove all records and tables from your database and start fresh within a couple seconds! No need to make a whole new database server.
 
-### Usage:
+### Usage
 
 `/reset`
 
@@ -153,13 +153,13 @@ Ever had a large database that you simply do not know what to do with anymore? T
 
 The `/table` command displays a table in a nicely formatted rich embed, with the columns as field titles, and the records from those columns as the field descriptions. The data is numbered so that you can easily correlate each record with its group.
 
-### Usage:
+### Usage
 
 `/table [name]`
 
 -   **Name:** Name of the table.
 
-### Example:
+### Example
 
 `/table games`
 
@@ -174,14 +174,14 @@ The `/table` command displays a table in a nicely formatted rich embed, with the
 
 The `/column` command displays a column from a page in a neat, paginated rich embed to visualize the column data.
 
-### Usage:
+### Usage
 
 `/column [table] [name]`
 
 -   **Table:** The table the column belongs to.
 -   **Name:** Name of the column.
 
-### Example:
+### Example
 
 `/column games name`
 
