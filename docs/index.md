@@ -9,7 +9,9 @@ hide:
 
 **Python Discord Codejam 2024**
 
-Discobase is a database library that works solely through Discord (_i.e._, nothing is stored locally!)
+This year, the theme was "information overload." We took that to heart, and made a database library that turns Discord into a database through various algorithms, and wrote a library to interact with it. Truly, we're overloading a Discord server with _lots_ of information.
+
+We used [discord.py](https://discordpy.readthedocs.io/) to interact with Discord (and turn it into a data store), and used [Pydantic](https://docs.pydantic.dev/) for serializing database models.
 
 ## Features
 
@@ -56,6 +58,15 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Contributions
+
+Per the presentation requirements, here's what each team member contributed:
+
+-   Everyone: Laid out the concepts for the core implementation and how it would work. You can see [this issue](https://github.com/ZeroIntensity/discobase/issues/4) for the discussion.
+-   Zero and Rubiks: Implemented the core library functionality.
+-   Skye and Gimpy: Built all the admin commands based on the core library.
+-   Rubiks: Wrote the demonstration bot shown in the [demonstration section](https://discobase.zintensity.dev/demonstration/)
 
 ## Copyright
 
