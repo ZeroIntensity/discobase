@@ -327,6 +327,19 @@ peter.password = "barfoo"
 peter.update()  # Run this in the background
 ```
 
+### Deleting
+
+You can also delete a saved record via the `delete()` method:
+
+```py
+async def main():
+    async with db.conn("My bot token..."):
+        peter = await User.find_unique(name="Peter")
+        peter.delete()
+```
+
+Per `update()` and `save()`, this returns a `Task` that can be awaited or ran in the background.
+
 ### Committing
 
 As you might have guessed, `update()` is the inverse of `save()`, in the sense that it only works for _saved_ objects. But what if you don't know if the object is saved or not? Technically speaking, you could check if the `__disco_id__` attribute is `-1` (e.g. `saved = peter.__disco_id__ != -1`), but that's not too convenient.
