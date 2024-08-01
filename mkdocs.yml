@@ -7,8 +7,8 @@ nav:
     - Home: index.md
     - Core Library: library.md
     - Discord Interface: discord_interface.md
-    - API Reference: reference.md
     - Demonstration: demonstration.md
+    - API Reference: reference.md
 
 theme:
     name: material

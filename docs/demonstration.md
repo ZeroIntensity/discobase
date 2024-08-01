@@ -4,6 +4,7 @@ hide:
 ---
 
 # Demonstration
+
 Now, we know that **Discobase**'s main functionality is just a database for storing data: we're allowing developers to access this 'database' to make their own applications.
 
 Single quotes are applied around the term database because the database is actually the Discord server created by the user, making **Discobase** the intermediary to couple this connection.
