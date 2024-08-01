@@ -1,5 +1,5 @@
 <div align="center">
-    <picture><img alt="discobase logo" src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" width=500></picture>
+    <img alt="discobase logo" src="https://raw.githubusercontent.com/ZeroIntensity/discobase/main/docs/assets/discobase_blurple.png" width=500>
     <br><br>
     <div align="center"><strong>Python Discord Codejam 2024 Submission: Spunky Sputniks</strong></div>
 </div>
