@@ -61,22 +61,19 @@ class Visualization(commands.Cog):
             for col in table_columns:
                 data[col].append(getattr(game, col))
 
-        try:
-            embed_from_content = em.EmbedFromContent(
-                title=f"Table: {table.__disco_name__.title()}",
-                content=data,
-                headers=table_columns,
-                style="table",
-            )
-            embeds = embed_from_content.create()
+        embed_from_content = em.EmbedFromContent(
+            title=f"Table: {table.__disco_name__.title()}",
+            content=data,
+            headers=table_columns,
+            style="table",
+        )
+        embeds = embed_from_content.create()
 
-            view = em.ArrowButtons(content=embeds)
+        view = em.ArrowButtons(content=embeds)
 
-            await interaction.edit_original_response(
-                content="", embed=embeds[0], view=view
-            )
-        except Exception as e:
-            logger.exception(f"{e}")
+        await interaction.edit_original_response(
+            content="", embed=embeds[0], view=view
+        )
 
     @app_commands.command(description="View the column data.")
     @app_commands.describe(
