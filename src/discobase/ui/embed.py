@@ -66,7 +66,9 @@ class ArrowButtons(discord.ui.View):
         self.position += 1
 
         # set a variable for left button
-        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][
+            0
+        ]
         # check if we're not on the first page, if yes then enable left button
         if not self.position == 0:
             left_button.disabled = False
@@ -82,7 +84,9 @@ class ArrowButtons(discord.ui.View):
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
-        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][
+            0
+        ]
         right_button = [x for x in self.children if x.custom_id == "r_button"][
             0
         ]
@@ -229,7 +233,9 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
+        embed.set_author(
+            name=self.author, url=self.url, icon_url=self.icon_url
+        )
 
         for content in self.content:
             embed.add_field(
@@ -245,6 +251,8 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
+        embed.set_author(
+            name=self.author, url=self.url, icon_url=self.icon_url
+        )
 
         return embed
