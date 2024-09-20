@@ -61,19 +61,22 @@ class Visualization(commands.Cog):
             for col in table_columns:
                 data[col].append(getattr(game, col))
 
-        embed_from_content = em.EmbedFromContent(
-            title=f"Table: {table.__disco_name__.title()}",
-            content=data,
-            headers=table_columns,
-            style=em.EmbedStyle.TABLE,
-        )
-        embeds = embed_from_content.create()
+        try:
+            embed_from_content = em.EmbedFromContent(
+                title=f"Table: {table.__disco_name__.title()}",
+                content=data,
+                headers=table_columns,
+                style="table",
+            )
+            embeds = embed_from_content.create()
 
-        view = em.ArrowButtons(content=embeds)
+            view = em.ArrowButtons(content=embeds)
 
-        await interaction.edit_original_response(
-            content="", embed=embeds[0], view=view
-        )
+            await interaction.edit_original_response(
+                content="", embed=embeds[0], view=view
+            )
+        except Exception as e:
+            logger.exception(f"{e}")
 
     @app_commands.command(description="View the column data.")
     @app_commands.describe(
@@ -122,7 +125,7 @@ class Visualization(commands.Cog):
             title=f"Column `{name.title()}` from Table `{col_table.__disco_name__.title()}`",
             content=column_values,
             headers=None,
-            style=em.EmbedStyle.COLUMN,
+            style="column",
         ).create()
 
         view = em.ArrowButtons(content=embeds)
@@ -149,7 +152,7 @@ class Visualization(commands.Cog):
                 title="Tables",
                 content=[],
                 headers=None,
-                style=em.EmbedStyle.DEFAULT,
+                style="default",
             ).create()
 
             embed_gen.add_field(
@@ -199,7 +202,7 @@ class Visualization(commands.Cog):
                 title=f"Table: {table.name.title()}",
                 content=schemas,
                 headers=None,
-                style=em.EmbedStyle.SCHEMA,
+                style="schema",
             ).create()
 
             await interaction.edit_original_response(
