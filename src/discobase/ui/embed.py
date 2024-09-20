@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime as dt
-from enum import Enum, auto
+from enum import StrEnum, auto
 from math import ceil
 
 import discord
@@ -97,7 +97,7 @@ class ArrowButtons(discord.ui.View):
             left_button.disabled = True
 
 
-class EmbedStyle(str, Enum):
+class EmbedStyle(StrEnum):
     COLUMN = auto()
     TABLE = auto()
     SCHEMA = auto()
