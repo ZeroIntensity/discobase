@@ -25,7 +25,6 @@ class ArrowButtons(discord.ui.View):
         self.content = content
         self.position = 0
         self.pages = len(self.content)
-        logger.debug(f"pages in button {self.pages}")
         self.on_ready()
 
     @discord.ui.button(
