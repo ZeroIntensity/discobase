@@ -25,7 +25,6 @@ class ArrowButtons(discord.ui.View):
         self.content = content
         self.position = 0
         self.pages = len(self.content)
-        logger.debug(f"pages in button {self.pages}")
         self.on_ready()
 
     @discord.ui.button(
@@ -67,7 +66,9 @@ class ArrowButtons(discord.ui.View):
         self.position += 1
 
         # set a variable for left button
-        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][
+            0
+        ]
         # check if we're not on the first page, if yes then enable left button
         if not self.position == 0:
             left_button.disabled = False
@@ -83,7 +84,9 @@ class ArrowButtons(discord.ui.View):
 
     def on_ready(self) -> None:
         """Checks the number of pages to decide which buttons to have enabled/disabled"""
-        left_button = [x for x in self.children if x.custom_id == "l_button"][0]
+        left_button = [x for x in self.children if x.custom_id == "l_button"][
+            0
+        ]
         right_button = [x for x in self.children if x.custom_id == "r_button"][
             0
         ]
@@ -97,7 +100,7 @@ class ArrowButtons(discord.ui.View):
             left_button.disabled = True
 
 
-class EmbedStyle(str, Enum):
+class EmbedStyle(Enum):
     COLUMN = auto()
     TABLE = auto()
     SCHEMA = auto()
@@ -135,13 +138,13 @@ class EmbedFromContent:
         self.style = style
 
     def create(self) -> list[discord.Embed] | discord.Embed:
-        if self.style == "column":
+        if self.style == EmbedStyle.COLUMN:
             return self._column_display()
-        elif self.style == "table":
+        elif self.style == EmbedStyle.TABLE:
             return self._table_display()
-        elif self.style == "schema":
+        elif self.style == EmbedStyle.SCHEMA:
             return self._schema_display()
-        elif self.style == "default":
+        elif self.style == EmbedStyle.DEFAULT:
             return self._default_display()
         else:
             raise ValueError("Invalid style input.")
@@ -230,7 +233,9 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
+        embed.set_author(
+            name=self.author, url=self.url, icon_url=self.icon_url
+        )
 
         for content in self.content:
             embed.add_field(
@@ -246,6 +251,8 @@ class EmbedFromContent:
         embed = discord.Embed(
             title=self.title, color=self.color, type="rich", timestamp=dt.now()
         )
-        embed.set_author(name=self.author, url=self.url, icon_url=self.icon_url)
+        embed.set_author(
+            name=self.author, url=self.url, icon_url=self.icon_url
+        )
 
         return embed
