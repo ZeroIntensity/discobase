@@ -65,7 +65,7 @@ class Visualization(commands.Cog):
             title=f"Table: {table.__disco_name__.title()}",
             content=data,
             headers=table_columns,
-            style="table",
+            style=em.EmbedStyle.TABLE,
         )
         embeds = embed_from_content.create()
 
@@ -122,7 +122,7 @@ class Visualization(commands.Cog):
             title=f"Column `{name.title()}` from Table `{col_table.__disco_name__.title()}`",
             content=column_values,
             headers=None,
-            style="column",
+            style=em.EmbedStyle.COLUMN,
         ).create()
 
         view = em.ArrowButtons(content=embeds)
@@ -149,7 +149,7 @@ class Visualization(commands.Cog):
                 title="Tables",
                 content=[],
                 headers=None,
-                style="default",
+                style=em.EmbedStyle.DEFAULT,
             ).create()
 
             embed_gen.add_field(
@@ -199,7 +199,7 @@ class Visualization(commands.Cog):
                 title=f"Table: {table.name.title()}",
                 content=schemas,
                 headers=None,
-                style="schema",
+                style=em.EmbedStyle.SCHEMA,
             ).create()
 
             await interaction.edit_original_response(

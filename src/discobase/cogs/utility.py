@@ -113,7 +113,7 @@ class Utility(commands.Cog):
                         title=f"Search Result - {results_found} Record(s) Found",
                         content=[],
                         headers=None,
-                        style="default",
+                        style=em.EmbedStyle.DEFAULT,
                     ).create()
 
                     embed.description = results_str
